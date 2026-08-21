@@ -1,0 +1,64 @@
+<!-- @startingPoint section="Layouts" subtitle="Two-column app shell: green nav aside + main content" viewport="1280x800" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sidebar Layout</title><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>html,body,#root{height:100%}
+@media (max-width:720px){.tdk-shell{flex-direction:column}.tdk-shell>aside{width:100%!important;min-height:0!important;flex-direction:row!important;align-items:center;overflow-x:auto;padding:10px 12px!important}.tdk-shell>aside nav{flex-direction:row!important;align-items:center}}</style></head><body><div id="root"></div>
+<script type="text/babel">
+const { SidebarNav, Breadcrumbs, Tabs, Card, Button, Badge, Switch, ProgressBar, Toast, ToastStack, Dialog } = window.TDKDesignSystem_abba7a;
+const ic=(d)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>;
+function App(){
+  const [nav,setNav]=React.useState('home');
+  const [tab,setTab]=React.useState(0);
+  const [dark,setDark]=React.useState(false);
+  const [dlg,setDlg]=React.useState(false);
+  const [toasts,setToasts]=React.useState([]);
+  React.useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light'},[dark]);
+  const toast=(t)=>{const id=Date.now();setToasts(x=>[...x,{id,...t}]);setTimeout(()=>setToasts(x=>x.filter(y=>y.id!==id)),4000)};
+  return <div className="tdk-shell" style={{display:'flex',minHeight:'100%'}}>
+    <SidebarNav brand="TDK_Design" logoSrc="../../assets/logo.svg" activeId={nav} onSelect={id=>{setNav(id);}}
+      items={[
+        {id:'home',label:'Dashboard',icon:ic('m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z')},
+        {id:'projects',label:'Projects',icon:ic('M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z')},
+        {id:'notes',label:'Notes',icon:ic('M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z')}]}
+      actionItems={[{id:'settings',label:'Settings',icon:ic('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z')}]}
+      footer={<div style={{padding:'0 12px',color:'var(--sidebar-fg-muted)'}}><Switch label={<span style={{color:'var(--sidebar-fg-muted)',fontSize:'var(--text-sm)'}}>Dark mode</span>} checked={dark} onChange={setDark}/></div>}/>    <main style={{flex:1,padding:'var(--space-6) var(--space-8)',maxWidth:'var(--content-max)',position:'relative',zIndex:'var(--z-main)',background:'var(--bg)',boxShadow:'var(--shadow-layer-main)'}}>
+      <Breadcrumbs items={[{label:'Home',href:'#'},{label:'Projects',href:'#'},{label:'Garden Tracker'}]} style={{marginBottom:'var(--space-3)'}}/>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'var(--space-3)',marginBottom:'var(--space-2)'}}>
+        <h1 style={{margin:0}}>Garden Tracker</h1>
+        <div style={{display:'flex',gap:'var(--space-2)'}}><Button variant="secondary" onClick={()=>toast({tone:'info',title:'Preview opened'})}>Preview</Button><Button onClick={()=>toast({tone:'success',title:'Changes saved'})}>Save changes</Button></div>
+      </div>
+      <p style={{color:'var(--fg-muted)',marginBottom:'var(--space-5)'}}>Raised-bed sensors, watering schedule, and harvest log. <Badge tone="success">Active</Badge></p>
+      <Tabs tabs={['Overview','Activity','Settings']} active={tab} onChange={setTab}/>
+      {tab===0&&<Card style={{borderTopLeftRadius:0}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'var(--space-5)'}}>
+          <ProgressBar label="Soil moisture" value={72} showValue/>
+          <ProgressBar label="Water tank" value={38} showValue tone="blue"/>
+          <ProgressBar label="Season progress" value={54} showValue/>
+        </div>
+      </Card>}
+      {tab===1&&<Card style={{borderTopLeftRadius:0}} padded={false}>
+        {[['Watered bed 2','8:00 AM','success'],['Sensor 3 offline','7:12 AM','warning'],['Harvested 1.2 kg tomatoes','Yesterday','neutral']].map(([t,w,tone],i)=>
+          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 20px',borderBottom:i<2?'1px solid var(--border)':'none'}}>
+            <span>{t}</span><span style={{display:'flex',gap:8,alignItems:'center'}}><Badge tone={tone}>{tone==='neutral'?'log':tone}</Badge><span style={{color:'var(--fg-subtle)',fontSize:'var(--text-xs)'}}>{w}</span></span>
+          </div>)}
+      </Card>}
+      {tab===2&&<Card style={{borderTopLeftRadius:0}}>
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--space-4)',maxWidth:380}}>
+          <Switch label="Public project" checked/>
+          <Switch label="Email alerts"/>
+          <Button variant="danger" onClick={()=>setDlg(true)} style={{alignSelf:'flex-start'}}>Delete project</Button>
+        </div>
+      </Card>}
+    </main>
+    <Dialog open={dlg} title="Delete project?" onClose={()=>setDlg(false)}
+      footer={<><Button variant="ghost" onClick={()=>setDlg(false)}>Cancel</Button><Button variant="danger" onClick={()=>{setDlg(false);toast({tone:'danger',title:'Project deleted',message:'Garden Tracker was removed.'})}}>Delete</Button></>}>
+      This removes Garden Tracker and all sensor history. It can't be undone.
+    </Dialog>
+    <ToastStack>{toasts.map(t=><Toast key={t.id} tone={t.tone} title={t.title} message={t.message} onDismiss={()=>setToasts(x=>x.filter(y=>y.id!==t.id))}/>)}</ToastStack>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

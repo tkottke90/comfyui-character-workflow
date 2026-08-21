@@ -1,0 +1,1 @@
+Modal dialog on native `<dialog>`: title | close-× grid header, padded content, right-to-left actions row (primary first in code, rightmost on screen). Solid raised surface, #222 @ 33% blurred backdrop. Close via ×, backdrop click, or Esc. Use for confirmations and short forms; use Drawer for side panels.

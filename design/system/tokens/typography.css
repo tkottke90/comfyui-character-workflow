@@ -1,0 +1,16 @@
+/* TDK_Design — typography tokens. Webfonts: Source Sans 3 + Source Code Pro (Google Fonts). */
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
+:root{
+--font-sans:'Source Sans 3',ui-sans-serif,system-ui,sans-serif;
+--font-mono:'Source Code Pro',ui-monospace,'SF Mono',monospace;
+/* Type scale (comfortable density) */
+--text-xs:12px;--text-sm:13.5px;--text-base:15px;--text-md:16.5px;--text-lg:19px;--text-xl:23px;--text-2xl:27px;--text-3xl:34px;--text-display:44px;
+--leading-tight:1.15;--leading-snug:1.35;--leading-normal:1.55;
+/* Weights: headings differ by WEIGHT only (Black 900), same family */
+--weight-body:400;--weight-medium:600;--weight-bold:700;--weight-heading:900;
+--tracking-heading:-0.01em;--tracking-caps:0.06em;
+/* Semantic */
+--text-body:var(--text-base)/var(--leading-normal) var(--font-sans);
+--text-heading:var(--weight-heading) var(--text-2xl)/var(--leading-tight) var(--font-sans);
+--text-code:var(--text-sm)/var(--leading-normal) var(--font-mono);
+}

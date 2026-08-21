@@ -1,0 +1,32 @@
+<!-- @dsCard group="Components" viewport="700x560" name="Cards" subtitle="Card with header/actions, media card, table card" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:18px 20px;background:var(--bg)}</style></head><body><div id="root"></div>
+<script type="text/babel">
+const { Card, Button, Badge } = window.TDKDesignSystem_abba7a;
+const th={textAlign:'left',padding:'10px 20px',fontSize:'var(--text-xs)',fontWeight:700,color:'var(--fg-muted)',textTransform:'uppercase',letterSpacing:'var(--tracking-caps)',borderBottom:'1px solid var(--border)',background:'var(--surface-sunken)'};
+const td={padding:'11px 20px',fontSize:'var(--text-sm)',borderBottom:'1px solid var(--border)'};
+ReactDOM.createRoot(document.getElementById('root')).render(<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start'}}>
+  <Card image="../../assets/sample-media.png" imageAlt="Balloons over a concert crowd" imageHeight={140} style={{gridRow:'span 2'}}>
+    <h3 style={{margin:'0 0 2px',fontSize:'var(--text-lg)'}}>Glass Souls' World Tour</h3>
+    <p style={{margin:'0 0 14px',color:'var(--fg-muted)',fontSize:'var(--text-sm)'}}>From your recent favorites</p>
+    <Button>Buy tickets</Button>
+  </Card>
+  <Card title="Recent activity" actions={<Button size="sm" variant="ghost">View all</Button>}>
+    <p style={{margin:0,color:'var(--fg-muted)',fontSize:'var(--text-sm)'}}>Cards are border-first: 1px steel-blue border, 10px radius, faint shadow.</p>
+  </Card>
+  <Card title="Harvest log" actions={<Button size="sm" variant="ghost">Export</Button>} padded={false} style={{gridColumn:'1 / -1'}}>
+    <table style={{width:'100%',borderCollapse:'collapse'}}>
+      <thead><tr><th style={th}>Crop</th><th style={th}>Bed</th><th style={{...th,textAlign:'right'}}>Yield</th><th style={th}>Status</th></tr></thead>
+      <tbody>
+        <tr><td style={td}>Tomatoes</td><td style={td}>Bed 2</td><td style={{...td,textAlign:'right',fontFamily:'var(--font-mono)'}}>1.2 kg</td><td style={td}><Badge tone="success">Harvested</Badge></td></tr>
+        <tr><td style={td}>Basil</td><td style={td}>Bed 1</td><td style={{...td,textAlign:'right',fontFamily:'var(--font-mono)'}}>240 g</td><td style={td}><Badge tone="green">Growing</Badge></td></tr>
+        <tr><td style={{...td,borderBottom:'none'}}>Carrots</td><td style={{...td,borderBottom:'none'}}>Bed 3</td><td style={{...td,borderBottom:'none',textAlign:'right',fontFamily:'var(--font-mono)'}}>—</td><td style={{...td,borderBottom:'none'}}><Badge tone="warning">Pests</Badge></td></tr>
+      </tbody>
+    </table>
+  </Card>
+</div>);
+</script></body></html>

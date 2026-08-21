@@ -1,0 +1,12 @@
+<!-- @dsCard group="Layouts" viewport="1280x800" name="Layouts" subtitle="Sidebar, single-action, stacked, and blog post layout demos" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TDK Layouts</title><link rel="stylesheet" href="../../styles.css">
+<style>body{margin:0;height:100vh;display:flex;flex-direction:column}
+.bar{display:flex;gap:6px;padding:10px 14px;background:var(--header-bg);align-items:center;position:relative;z-index:var(--z-header);box-shadow:var(--shadow-layer-header)}
+.bar b{color:var(--header-fg);font-weight:900;margin-right:8px;font-size:14px}
+.bar button{font:600 13px var(--font-sans);color:var(--header-fg-muted);background:transparent;border:none;border-radius:var(--radius-md);padding:6px 12px;cursor:pointer}
+.bar button.on{background:var(--header-active-bg);color:var(--header-active-fg)}
+iframe{flex:1;border:none;width:100%}</style></head><body>
+<div class="bar"><b>TDK Layouts</b><button class="on" data-src="sidebar-layout.html">Sidebar</button><button data-src="single-action.html">Single action</button><button data-src="stacked-layout.html">Stacked</button><button data-src="blog-post.html">Blog post</button></div>
+<iframe src="sidebar-layout.html" title="Layout preview"></iframe>
+<script>document.querySelectorAll('.bar button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.bar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.querySelector('iframe').src=b.dataset.src;}));</script>
+</body></html>

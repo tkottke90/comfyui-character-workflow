@@ -1,0 +1,13 @@
+/* TDK_Design — base element styles */
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);font-size:var(--text-base);line-height:var(--leading-normal);background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-weight:var(--weight-heading);line-height:var(--leading-tight);letter-spacing:var(--tracking-heading);margin:0 0 var(--space-3)}
+h1{font-size:var(--text-2xl)}h2{font-size:var(--text-xl)}h3{font-size:var(--text-lg)}h4{font-size:var(--text-md)}
+p{margin:0 0 var(--space-3)}
+a{color:var(--link);text-decoration:underline;text-underline-offset:2px}
+a:hover{color:var(--link-hover)}
+code,pre{font-family:var(--font-mono);font-size:var(--text-sm)}
+code{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px 5px}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+::selection{background:var(--color-apple-200);color:var(--color-apple-950)}
+[data-theme="dark"] ::selection{background:var(--color-apple-800);color:var(--color-apple-100)}

@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Dialogs" subtitle="Native <dialog>: title|close header, RTL actions, blurred backdrop" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:18px 20px;background:var(--bg)}</style></head><body><div id="root"></div>
+<script type="text/babel">
+const { Dialog, Button, Field, Input } = window.TDKDesignSystem_abba7a;
+function Demo(){
+  const [confirm,setConfirm]=React.useState(true);
+  const [form,setForm]=React.useState(false);
+  return <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:560}}>
+    <div style={{display:'flex',gap:10}}>
+      <Button variant="outlined" tone="warning" onClick={()=>setConfirm(true)}>Open confirm dialog</Button>
+      <Button variant="outlined" tone="secondary" onClick={()=>setForm(true)}>Open form dialog</Button>
+    </div>
+    <p style={{margin:0,fontSize:'var(--text-sm)',color:'var(--fg-muted)'}}>Native <code>&lt;dialog&gt;</code> · solid surface · backdrop #222 @ 33% + blur · close via ×, backdrop click, or Esc · actions ordered right-to-left (primary first in code, rightmost on screen).</p>
+    <Dialog open={confirm} title="Delete project?" onClose={()=>setConfirm(false)}
+      actions={<><Button tone="warning" onClick={()=>setConfirm(false)}>Delete</Button><Button variant="text" tone="secondary" onClick={()=>setConfirm(false)}>Cancel</Button></>}>
+      This removes Garden Tracker and all sensor history. It can't be undone.
+    </Dialog>
+    <Dialog open={form} title="Rename project" onClose={()=>setForm(false)} width={380}
+      actions={<><Button onClick={()=>setForm(false)}>Save</Button><Button variant="text" tone="secondary" onClick={()=>setForm(false)}>Cancel</Button></>}>
+      <Field label="Project name" htmlFor="rn"><Input id="rn" defaultValue="Garden Tracker"/></Field>
+    </Dialog>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

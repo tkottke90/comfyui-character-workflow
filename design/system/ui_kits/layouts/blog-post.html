@@ -1,0 +1,49 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blog Post Layout</title><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>html,body,#root{height:100%}
+.tag-chip{display:inline-flex;align-items:center;font:600 var(--text-xs)/1 var(--font-sans);color:var(--accent-soft-fg);background:var(--accent-soft-bg);border:1px solid var(--accent-soft-border);border-radius:var(--radius-full,999px);padding:5px 12px;text-decoration:none;cursor:pointer;transition:transform var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out)}
+.tag-chip:hover{transform:translateY(-1px) scale(1.04);box-shadow:var(--shadow-toast);background:var(--accent-soft-border)}
+.tag-chip:active{transform:none}</style></head><body><div id="root"></div>
+<script type="text/babel">
+const { Button } = window.TDKDesignSystem_abba7a;
+function App(){
+  return <div style={{minHeight:'100%',display:'flex',flexDirection:'column'}}>
+    <header style={{background:'var(--header-bg)',color:'var(--header-fg)',padding:'0 var(--space-6)',display:'flex',alignItems:'center',gap:'var(--space-6)',height:56,position:'sticky',top:0,zIndex:'var(--z-header)',boxShadow:'var(--shadow-layer-header)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'var(--space-2)'}}>
+        <img src="../../assets/logo.svg" alt="" style={{height:26,filter:'var(--header-logo-filter)'}}/>
+        <span style={{fontWeight:'var(--weight-heading)',color:'var(--header-fg)'}}>TDK_Design</span>
+      </div>
+      <div style={{flex:1}}></div>
+      <Button size="sm" variant="secondary">Subscribe</Button>
+    </header>
+    <main style={{flex:1,width:'100%',maxWidth:720,margin:'0 auto',padding:'var(--space-8) var(--space-5)'}}>
+      <h1 style={{marginBottom:'var(--space-3)'}}>Watering less, harvesting more</h1>
+      <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:'var(--space-2)',color:'var(--fg-muted)',fontSize:'var(--text-sm)',marginBottom:'var(--space-3)'}}>
+        <span style={{fontWeight:'var(--weight-medium)',color:'var(--fg)'}}>Priya Raman</span>
+        <span aria-hidden="true">·</span>
+        <time dateTime="2026-07-02">Published Jul 2, 2026</time>
+        <span aria-hidden="true">·</span>
+        <time dateTime="2026-08-14" style={{fontStyle:'italic'}}>Updated Aug 14, 2026</time>
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'var(--space-2)',marginBottom:'var(--space-6)'}}>
+        {['irrigation','sensors','how-to','summer'].map(t=><a key={t} className="tag-chip" href="#">{t}</a>)}
+      </div>
+      <article style={{fontSize:'var(--text-md)',lineHeight:1.7,color:'var(--fg)'}}>
+        <p>When we installed moisture sensors in the raised beds last spring, the first surprise wasn't how dry the soil got — it was how rarely it needed water at all.</p>
+        <h2>What the sensors showed</h2>
+        <p>Bed 2, the one we watered daily out of habit, sat above 60% moisture for most of June. The tomatoes didn't need us nearly as much as we needed to feel useful.</p>
+        <p>Cutting back to sensor-triggered watering dropped tank usage by a third, and the harvest log says the plants didn't notice.</p>
+        <h2>The schedule that stuck</h2>
+        <p>Water when the sensor dips below 40%, always before 9 AM, and never on harvest days. That's the whole system — the rest is letting the data argue with your instincts and win.</p>
+      </article>
+    </main>
+    <footer style={{borderTop:'1px solid var(--border)',padding:'var(--space-4) var(--space-6)',fontSize:'var(--text-sm)',color:'var(--fg-muted)',display:'flex',justifyContent:'space-between'}}>
+      <span>© 2026 TDK_Design</span><a href="#">Contact</a>
+    </footer>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>
