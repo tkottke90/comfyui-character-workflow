@@ -1,0 +1,556 @@
+import { Router, Request, Response } from 'express';
+import { CharactersService } from '../services/characters.service';
+import { TemplatesService } from '../services/templates.service';
+import { CharacterRecord } from '../schemas/character.schema';
+import { NotFoundError, BadRequestError } from '../errors/http.errors';
+import { CHECKLIST_DEFINITIONS } from '../checklist/definitions';
+import {
+  compileIdentityBlock,
+  defaultAuditRows,
+  deriveChecklist,
+  findImagePath,
+  getNextAction,
+  overviewChecklistRows,
+  parsePhaseChecklist,
+  DEFAULT_NEGATIVE_PROMPT,
+} from '../lib/character-logic';
+
+const VIEW_DEFINITIONS: Array<{
+  key: string;
+  label: string;
+  changeClause: string;
+  reorient: boolean;
+}> = [
+  {
+    key: 'three_quarter',
+    label: 'Three-quarter',
+    reorient: true,
+    changeClause:
+      'Turn to a three-quarter view, her body angled to one side, standing relaxed with arms at her sides, full body visible from head to bare feet.',
+  },
+  {
+    key: 'profile',
+    label: 'Profile',
+    reorient: true,
+    changeClause:
+      'Turn to show a full side profile, standing straight, arms relaxed at the sides, full body visible.',
+  },
+  {
+    key: 'back',
+    label: 'Back',
+    reorient: true,
+    changeClause:
+      'Turn to face directly away from the camera, arms relaxed, full body visible, showing the back of the hair.',
+  },
+  {
+    key: 'front_portrait',
+    label: 'Front portrait',
+    reorient: false,
+    changeClause:
+      'A close-up head and shoulders portrait, facing the camera directly, neutral expression. Sharp facial detail.',
+  },
+  {
+    key: 'three_quarter_portrait',
+    label: 'Three-quarter portrait',
+    reorient: false,
+    changeClause:
+      'A close-up head and shoulders portrait in three-quarter view, head turned slightly, eyes toward camera, neutral expression. Sharp facial detail.',
+  },
+];
+
+function param(req: Request, name: string): string {
+  const value = req.params[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getCharacterOr404(service: CharactersService, slug: string): CharacterRecord {
+  const character = service.get(slug);
+  if (!character) throw new NotFoundError(`Character "${slug}" not found`);
+  return character;
+}
+
+function baseContext(character: CharacterRecord) {
+  return {
+    character,
+    checklist: deriveChecklist(character),
+  };
+}
+
+export function createCharactersRouter(
+  characters: CharactersService,
+  templates: TemplatesService,
+): Router {
+  const router = Router();
+
+  router.get('/', (_req: Request, res: Response) => {
+    res.render('characters/list.njk', { characters: characters.list() });
+  });
+
+  router.get('/new', (_req: Request, res: Response) => {
+    res.render('characters/new.njk', {});
+  });
+
+  router.post('/', (req: Request, res: Response) => {
+    const name = String(req.body.name ?? '').trim();
+    if (!name) throw new BadRequestError('A character name is required');
+
+    const record = characters.create({ name });
+    res.redirect(`/characters/${record.slug}`);
+  });
+
+  router.get('/:slug', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const checklist = deriveChecklist(character);
+    res.render('characters/overview.njk', {
+      character,
+      checklist,
+      rows: overviewChecklistRows(checklist),
+      nextAction: getNextAction(character.slug, checklist),
+    });
+  });
+
+  router.post('/:slug/delete', (req: Request, res: Response) => {
+    characters.remove(param(req, 'slug'));
+    res.redirect('/characters');
+  });
+
+  // ---- Spec builder ----
+
+  router.get('/:slug/spec', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/spec.njk', {
+      ...baseContext(character),
+      templates: templates.list(),
+      previewIdentityBlock: compileIdentityBlock(
+        character.name,
+        character.useNameAsToken,
+        character.attributes,
+      ),
+    });
+  });
+
+  router.post('/:slug/spec', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const attributes = { ...character.attributes, ...(req.body.attributes ?? {}) };
+    const useNameAsToken = Boolean(req.body.useNameAsToken);
+    const identityBlock = character.identityBlockFrozen
+      ? character.identityBlock
+      : compileIdentityBlock(character.name, useNameAsToken, attributes);
+
+    characters.update(character.slug, {
+      attributes,
+      useNameAsToken,
+      body_template: String(req.body.body_template ?? character.body_template),
+      identityBlock,
+      negativePrompt: String(req.body.negativePrompt ?? '') || DEFAULT_NEGATIVE_PROMPT,
+    });
+
+    res.redirect(`/characters/${character.slug}/spec`);
+  });
+
+  router.post('/:slug/spec/features', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const text = String(req.body.text ?? '').trim();
+    if (!text) throw new BadRequestError('Feature text is required');
+
+    const size = ['easy', 'medium', 'hard'].includes(req.body.size) ? req.body.size : 'medium';
+    characters.update(character.slug, {
+      distinguishingFeatures: [...character.distinguishingFeatures, { text, size }],
+    });
+    res.redirect(`/characters/${character.slug}/spec`);
+  });
+
+  router.post('/:slug/spec/features/:index/delete', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const index = Number(param(req, 'index'));
+    characters.update(character.slug, {
+      distinguishingFeatures: character.distinguishingFeatures.filter((_, i) => i !== index),
+    });
+    res.redirect(`/characters/${character.slug}/spec`);
+  });
+
+  // ---- Casting: pre-flight ----
+
+  router.get('/:slug/casting/preflight', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/casting_preflight.njk', {
+      ...baseContext(character),
+      items: CHECKLIST_DEFINITIONS.preflight,
+      heroPath: findImagePath(character.images, 'Hero full-body'),
+    });
+  });
+
+  router.post('/:slug/casting/preflight', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const checklist = {
+      ...character.checklist,
+      ...parsePhaseChecklist('preflight', req.body.checklist),
+    };
+    characters.update(character.slug, {
+      checklist,
+      images: upsertImage(character.images, 'Hero full-body', String(req.body.heroPath ?? '')),
+    });
+    res.redirect(`/characters/${character.slug}/casting/preflight`);
+  });
+
+  // ---- Casting: batch ----
+
+  router.get('/:slug/casting/batch', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/casting_batch.njk', baseContext(character));
+  });
+
+  router.post('/:slug/casting/batch/candidates', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const startSeed = Number(req.body.startSeed);
+    const count = Math.min(Math.max(Number(req.body.count) || 1, 1), 16);
+    if (!Number.isFinite(startSeed))
+      throw new BadRequestError('A numeric starting seed is required');
+
+    const createdAt = new Date().toISOString();
+    const newCandidates = Array.from({ length: count }, (_, i) => ({
+      seed: startSeed + i,
+      note: '',
+      createdAt,
+    }));
+
+    characters.update(character.slug, {
+      castingCandidates: [...character.castingCandidates, ...newCandidates],
+      checklist: {
+        ...character.checklist,
+        'casting.variance_strategy': true,
+      },
+    });
+    res.redirect(`/characters/${character.slug}/casting/batch`);
+  });
+
+  router.post('/:slug/casting/candidates/:seed/select', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    characters.update(character.slug, { winnerCandidateSeed: Number(param(req, 'seed')) });
+    res.redirect(`/characters/${character.slug}/casting/winner-audit`);
+  });
+
+  // ---- Casting: winner audit + lock ----
+
+  router.get('/:slug/casting/winner-audit', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const rows =
+      character.auditRows.length > 0 ? character.auditRows : defaultAuditRows(character.attributes);
+    res.render('characters/winner_audit.njk', { ...baseContext(character), rows });
+  });
+
+  router.post('/:slug/casting/winner-audit', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const posted = Array.isArray(req.body.rows)
+      ? req.body.rows
+      : Object.values(req.body.rows ?? {});
+    const auditRows = posted.map((row: Record<string, unknown>) => ({
+      attribute: String(row.attribute ?? ''),
+      specValue: String(row.specValue ?? ''),
+      imageValue: String(row.imageValue ?? ''),
+      ok: Boolean(row.ok),
+    }));
+
+    characters.update(character.slug, {
+      auditRows,
+      checklist: { ...character.checklist, 'casting.candidates_scored': true },
+    });
+    res.redirect(`/characters/${character.slug}/casting/winner-audit`);
+  });
+
+  router.post('/:slug/casting/lock', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    if (character.winnerCandidateSeed === null) {
+      throw new BadRequestError('Select a winning candidate before locking');
+    }
+    if (character.auditRows.some((row) => !row.ok)) {
+      throw new BadRequestError('Resolve every flagged attribute before locking');
+    }
+
+    characters.update(character.slug, {
+      locked_seed: character.winnerCandidateSeed,
+      identityBlockFrozen: true,
+      checklist: {
+        ...character.checklist,
+        'casting.winner_selected': true,
+        'casting.reverse_spec': true,
+      },
+    });
+    res.redirect(`/characters/${character.slug}/refinement`);
+  });
+
+  // ---- Refinement ----
+
+  router.get('/:slug/refinement', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/refinement.njk', {
+      ...baseContext(character),
+      items: CHECKLIST_DEFINITIONS.refinement,
+    });
+  });
+
+  router.post('/:slug/refinement', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const step = Math.min(
+      Math.max(Number(req.body.currentStep) || character.refinement.currentStep, 1),
+      3,
+    );
+
+    characters.update(character.slug, {
+      refinement: {
+        currentStep: step,
+        faceDetailDenoise:
+          Number(req.body.faceDetailDenoise) || character.refinement.faceDetailDenoise,
+        cleanupDenoise: Number(req.body.cleanupDenoise) || character.refinement.cleanupDenoise,
+        upscaleTarget: Number(req.body.upscaleTarget) || character.refinement.upscaleTarget,
+      },
+      checklist: {
+        ...character.checklist,
+        ...parsePhaseChecklist('refinement', req.body.checklist),
+      },
+    });
+    res.redirect(`/characters/${character.slug}/refinement`);
+  });
+
+  // ---- Anchor kit hub ----
+
+  router.get('/:slug/kit', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/kit.njk', {
+      ...baseContext(character),
+      items: CHECKLIST_DEFINITIONS.anchorKit,
+    });
+  });
+
+  router.post('/:slug/kit/images', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const label = String(req.body.label ?? '').trim();
+    if (!label) throw new BadRequestError('An image label is required');
+
+    characters.update(character.slug, {
+      images: upsertImage(
+        character.images,
+        label,
+        String(req.body.path ?? ''),
+        String(req.body.notes ?? ''),
+      ),
+    });
+    res.redirect(`/characters/${character.slug}/kit`);
+  });
+
+  router.post('/:slug/kit/checklist', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const manualItems = ['polish_before_fix', 'detail_closeups', 'loose_hair_alt'];
+    const checked = req.body.checklist ?? {};
+    const checklist = { ...character.checklist };
+    for (const id of manualItems) {
+      checklist[`anchorKit.${id}`] = Boolean(checked[id]);
+    }
+    characters.update(character.slug, { checklist });
+    res.redirect(`/characters/${character.slug}/kit`);
+  });
+
+  // ---- Face crop ----
+
+  router.get('/:slug/kit/face-crop', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/face_crop.njk', baseContext(character));
+  });
+
+  router.post('/:slug/kit/face-crop', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    characters.update(character.slug, {
+      faceCrop: {
+        path: String(req.body.path ?? ''),
+        confirmed: Boolean(req.body.confirmed),
+      },
+      images: upsertImage(
+        character.images,
+        'Face crop (square, front)',
+        String(req.body.path ?? ''),
+      ),
+    });
+    res.redirect(`/characters/${character.slug}/kit/face-crop`);
+  });
+
+  // ---- View generation ----
+
+  router.get('/:slug/kit/views', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/view_generation.njk', {
+      ...baseContext(character),
+      availableViewDefs: VIEW_DEFINITIONS.filter(
+        (def) => !character.views.some((v) => v.key === def.key),
+      ),
+    });
+  });
+
+  router.post('/:slug/kit/views', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const def = VIEW_DEFINITIONS.find((v) => v.key === req.body.key);
+    if (!def) throw new BadRequestError('Unknown view type');
+    if (character.views.some((v) => v.key === def.key)) {
+      throw new BadRequestError(`${def.label} has already been added`);
+    }
+
+    characters.update(character.slug, {
+      views: [
+        ...character.views,
+        {
+          key: def.key,
+          label: def.label,
+          changeClause: def.changeClause,
+          reorient: def.reorient,
+          status: 'pending',
+          seed: null,
+          imagePath: '',
+          rating: 0,
+        },
+      ],
+    });
+    res.redirect(`/characters/${character.slug}/kit/views`);
+  });
+
+  router.post('/:slug/kit/views/:key', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const status = ['pending', 'generating', 'done'].includes(req.body.status)
+      ? req.body.status
+      : 'pending';
+
+    characters.update(character.slug, {
+      views: character.views.map((view) =>
+        view.key === param(req, 'key')
+          ? {
+              ...view,
+              changeClause: String(req.body.changeClause ?? view.changeClause),
+              reorient: Boolean(req.body.reorient),
+              status,
+              seed: req.body.seed ? Number(req.body.seed) : view.seed,
+              imagePath: String(req.body.imagePath ?? view.imagePath),
+              rating: Number(req.body.rating) || 0,
+            }
+          : view,
+      ),
+    });
+    res.redirect(`/characters/${character.slug}/kit/views`);
+  });
+
+  router.post('/:slug/kit/views/:key/delete', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    characters.update(character.slug, {
+      views: character.views.filter((view) => view.key !== param(req, 'key')),
+    });
+    res.redirect(`/characters/${character.slug}/kit/views`);
+  });
+
+  // ---- Polish ----
+
+  router.get('/:slug/kit/polish/:viewKey', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const view = character.views.find((v) => v.key === param(req, 'viewKey'));
+    if (!view) throw new NotFoundError(`View "${param(req, 'viewKey')}" not found`);
+
+    const polish = character.polish.find((p) => p.viewKey === param(req, 'viewKey')) ?? {
+      viewKey: param(req, 'viewKey'),
+      denoise: 0.21,
+      eyesChecked: false,
+      accepted: false,
+      fixMode: 'remove' as const,
+      fixDescription: '',
+      brushSize: 14,
+      fixApplied: false,
+    };
+
+    res.render('characters/polish.njk', { ...baseContext(character), view, polish });
+  });
+
+  router.post('/:slug/kit/polish/:viewKey', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const existing = character.polish.find((p) => p.viewKey === param(req, 'viewKey'));
+
+    const next = {
+      viewKey: param(req, 'viewKey'),
+      denoise: Number(req.body.denoise) || existing?.denoise || 0.21,
+      eyesChecked: Boolean(req.body.eyesChecked),
+      accepted: Boolean(req.body.accepted) || existing?.accepted || false,
+      fixMode: req.body.fixMode === 'add' ? ('add' as const) : ('remove' as const),
+      fixDescription: String(req.body.fixDescription ?? existing?.fixDescription ?? ''),
+      brushSize: Number(req.body.brushSize) || existing?.brushSize || 14,
+      fixApplied: Boolean(req.body.fixApplied) || existing?.fixApplied || false,
+    };
+
+    const polish = existing
+      ? character.polish.map((p) => (p.viewKey === param(req, 'viewKey') ? next : p))
+      : [...character.polish, next];
+
+    characters.update(character.slug, { polish });
+    res.redirect(`/characters/${character.slug}/kit/polish/${param(req, 'viewKey')}`);
+  });
+
+  // ---- Downstream validation ----
+
+  router.get('/:slug/validation', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/validation.njk', baseContext(character));
+  });
+
+  router.post('/:slug/validation', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const field = (key: string) => ({
+      status: ['not-run', 'pass', 'fail'].includes(req.body[key]?.status)
+        ? req.body[key].status
+        : 'not-run',
+      note: String(req.body[key]?.note ?? ''),
+    });
+
+    characters.update(character.slug, {
+      downstreamValidation: {
+        newPose: field('newPose'),
+        newOutfit: field('newOutfit'),
+        noTemplateProportions: field('noTemplateProportions'),
+      },
+    });
+    res.redirect(`/characters/${character.slug}/validation`);
+  });
+
+  // ---- Dataset tracking ----
+
+  router.get('/:slug/dataset', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.render('characters/dataset.njk', baseContext(character));
+  });
+
+  router.post('/:slug/dataset', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const checked = req.body.checklist ?? {};
+
+    characters.update(character.slug, {
+      dataset: {
+        imagesCount: Number(req.body.imagesCount) || 0,
+        targetMin: Number(req.body.targetMin) || character.dataset.targetMin,
+        targetMax: Number(req.body.targetMax) || character.dataset.targetMax,
+        notes: String(req.body.notes ?? ''),
+      },
+      checklist: {
+        ...character.checklist,
+        'dataset.curated': Boolean(checked.curated),
+        'dataset.lora_trained': Boolean(checked.lora_trained),
+        'dataset.lora_tested': Boolean(checked.lora_tested),
+      },
+    });
+    res.redirect(`/characters/${character.slug}/dataset`);
+  });
+
+  return router;
+}
+
+function upsertImage(
+  images: CharacterRecord['images'],
+  label: string,
+  path: string,
+  notes = '',
+): CharacterRecord['images'] {
+  const existingNotes = images.find((image) => image.label === label)?.notes ?? notes;
+  const withoutLabel = images.filter((image) => image.label !== label);
+  return [...withoutLabel, { label, path, notes: notes || existingNotes }];
+}

@@ -1,0 +1,41 @@
+{% extends "layout.njk" %}
+{% set section = "templates" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Templates', href: '/templates'}, {label: 'Upload New Template'}]) }}
+  <h1 class="text-xl font-black tracking-tight mb-5">Upload New Template</h1>
+
+  <form method="post" action="/templates">
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+      <div data-file-upload class="rounded-lg border-2 border-dashed border-steel-300 dark:border-steel-700 aspect-square max-w-md flex flex-col items-center justify-center gap-2 text-center p-6 cursor-pointer"
+           onclick="this.querySelector('input[type=file]').click()">
+        <input type="hidden" name="imageDataUrl" value="" />
+        <img data-file-preview class="hidden max-h-40 mb-2 object-contain" alt="" />
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-steel-400">
+          <path d="M12 3v12m0 0-4-4m4 4 4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+        <div class="text-[13.5px] font-semibold" data-file-label>Drag a file here, or click to browse</div>
+        <div class="text-[12px] text-steel-500">PNG or JPG · plain silhouette or pose sheet, no shading or texture</div>
+        <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
+      </div>
+
+      {% call ui.card() %}
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="name">Name</label>
+        <input id="name" name="name" type="text" required placeholder="e.g. Hourglass, OpenPose — ¾ turn"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4" />
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1">Type</label>
+        <div class="flex items-center gap-4 mb-4 text-[13.5px]">
+          <label class="flex items-center gap-1.5"><input type="radio" name="type" value="silhouette" checked class="accent-apple-600" /> Silhouette</label>
+          <label class="flex items-center gap-1.5"><input type="radio" name="type" value="openpose" class="accent-apple-600" /> OpenPose sheet</label>
+        </div>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="notes">Notes (optional)</label>
+        <textarea id="notes" name="notes" rows="3" placeholder="What this template is for, where it should be used…"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px] mb-4"></textarea>
+
+        {{ ui.button('Add to Library') }}
+      {% endcall %}
+    </div>
+  </form>
+{% endblock %}

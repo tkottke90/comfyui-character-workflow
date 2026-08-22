@@ -1,0 +1,11 @@
+.placeholder-photo {
+  background: #eaeef4;
+  border: 1px solid #d0dbe7;
+}
+
+@media (prefers-color-scheme: dark) {
+  .placeholder-photo {
+    background: #30445c;
+    border-color: #2c3b4e;
+  }
+}

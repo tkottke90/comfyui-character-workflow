@@ -1,4 +1,3 @@
 import { App } from './app';
 
-App()
-  .start()
+App().start();

@@ -1,0 +1,31 @@
+<aside class="w-60 shrink-0 bg-apple-200 dark:bg-apple-900 text-apple-950 dark:text-apple-100 flex flex-col gap-4 p-5 md:min-h-screen">
+  <a href="/characters" class="flex items-center gap-2 font-black text-[16.5px] tracking-wide">
+    <img src="/logo.svg" class="w-6 h-6 dark:invert" style="filter:brightness(0)" alt="" />
+    <span>Anchor</span>
+  </a>
+
+  <nav class="flex flex-col gap-1 mt-2">
+    <a href="/characters"
+       class="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] font-semibold transition-colors
+              {{ 'bg-apple-600 text-white' if section == 'characters' else 'hover:bg-white/40 dark:hover:bg-white/10' }}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+      Characters
+    </a>
+    <a href="/templates"
+       class="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] font-semibold transition-colors
+              {{ 'bg-apple-600 text-white' if section == 'templates' else 'hover:bg-white/40 dark:hover:bg-white/10' }}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+      Templates
+    </a>
+  </nav>
+</aside>

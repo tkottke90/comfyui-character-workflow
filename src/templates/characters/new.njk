@@ -1,0 +1,20 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: 'New Character'}]) }}
+  <h1 class="text-xl font-black tracking-tight mb-5">New Character</h1>
+
+  <form method="post" action="/characters" class="max-w-sm">
+    {% call ui.card() %}
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1.5" for="name">Name</label>
+      <input id="name" name="name" type="text" required autofocus
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4"
+        placeholder="e.g. Kwame Asante" />
+      <p class="text-[13px] text-steel-500 mb-4">
+        Everything else — attributes, seed, kit — gets filled in from the Spec Builder onward.
+      </p>
+      {{ ui.button('Create Character') }}
+    {% endcall %}
+  </form>
+{% endblock %}

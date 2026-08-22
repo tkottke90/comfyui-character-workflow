@@ -1,0 +1,72 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'View Generation'}]) }}
+  <div class="flex items-center justify-between mb-5">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-black tracking-tight">View Generation</h1>
+      {{ ui.statusBadge(character.status) }}
+    </div>
+    {{ ui.mono(character.views.length ~ ' views added') }}
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
+    {% for view in character.views %}
+      <form method="post" action="/characters/{{ character.slug }}/kit/views/{{ view.key }}">
+        {% call ui.card(view.label) %}
+          <div class="flex items-center justify-between mb-2">
+            <label class="flex items-center gap-2 text-[12.5px]">
+              <input type="checkbox" name="reorient" {% if view.reorient %}checked{% endif %} class="h-3.5 w-3.5 accent-apple-600" />
+              turns her (vs. same-facing)
+            </label>
+            {{ ui.pill(view.status, 'success' if view.status == 'done' else ('blue' if view.status == 'generating' else 'neutral')) }}
+          </div>
+
+          <textarea name="changeClause" rows="3" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] mb-2">{{ view.changeClause }}</textarea>
+
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <select name="status" class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2 py-1.5 text-[12.5px]">
+              <option value="pending" {% if view.status == 'pending' %}selected{% endif %}>pending</option>
+              <option value="generating" {% if view.status == 'generating' %}selected{% endif %}>generating</option>
+              <option value="done" {% if view.status == 'done' %}selected{% endif %}>done</option>
+            </select>
+            <input name="seed" type="number" value="{{ view.seed }}" placeholder="seed"
+              class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2 py-1.5 text-[12.5px] font-mono" />
+          </div>
+
+          <input name="imagePath" type="text" value="{{ view.imagePath }}" placeholder="image path"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono mb-2" />
+
+          <label class="block text-[12px] text-steel-500 mb-2">
+            Rating
+            <select name="rating" class="ml-1 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-1.5 py-1 text-[12px]">
+              {% for n in [0, 1, 2, 3] %}
+                <option value="{{ n }}" {% if view.rating == n %}selected{% endif %}>{{ n }} ★</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <div class="flex items-center justify-between">
+            <button type="submit" class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Save</button>
+            <a href="/characters/{{ character.slug }}/kit/polish/{{ view.key }}" class="text-[12.5px] font-semibold text-steel-500 hover:underline">Polish →</a>
+          </div>
+        {% endcall %}
+      </form>
+    {% endfor %}
+
+    {% if availableViewDefs.length > 0 %}
+      {% call ui.card() %}
+        <div class="text-[13px] font-semibold mb-2">+ Add another view</div>
+        <div class="flex flex-col gap-1.5">
+          {% for def in availableViewDefs %}
+            <form method="post" action="/characters/{{ character.slug }}/kit/views">
+              <input type="hidden" name="key" value="{{ def.key }}" />
+              <button type="submit" class="text-[13px] text-apple-700 dark:text-apple-300 hover:underline">{{ def.label }}</button>
+            </form>
+          {% endfor %}
+        </div>
+      {% endcall %}
+    {% endif %}
+  </div>
+{% endblock %}

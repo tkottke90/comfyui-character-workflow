@@ -1,0 +1,99 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name}]) }}
+
+  <div class="flex items-center justify-between mb-1">
+    <div class="flex items-center gap-3">
+      <h1 class="text-2xl font-black tracking-tight">{{ character.name }}</h1>
+      {{ ui.statusBadge(character.status) }}
+    </div>
+    <span class="font-mono text-[13px] text-steel-400">created {{ character.created }}</span>
+  </div>
+
+  <div class="flex items-center gap-4 mb-6">
+    <a href="/characters/{{ character.slug }}/spec" class="text-[13.5px] text-steel-600 dark:text-steel-300 hover:underline">Spec</a>
+    <a href="/characters/{{ character.slug }}/casting/preflight" class="text-[13.5px] text-steel-600 dark:text-steel-300 hover:underline">Casting</a>
+    <a href="/characters/{{ character.slug }}/refinement" class="text-[13.5px] text-steel-600 dark:text-steel-300 hover:underline">Refinement</a>
+    <a href="/characters/{{ character.slug }}/kit" class="text-[13.5px] text-steel-600 dark:text-steel-300 hover:underline">Anchor kit</a>
+    <a href="/characters/{{ character.slug }}/validation" class="text-[13.5px] text-steel-600 dark:text-steel-300 hover:underline">Validation</a>
+    <a href="/characters/{{ character.slug }}/dataset" class="text-[13.5px] text-steel-600 dark:text-steel-300 hover:underline">Dataset</a>
+  </div>
+
+  {% if nextAction %}
+    <div class="flex items-center justify-between rounded-lg border border-apple-300 bg-apple-100 dark:bg-apple-900 dark:border-apple-700 px-4 py-3 mb-6">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-apple-800 dark:text-apple-200">Up next</span>
+      <a href="{{ nextAction.path }}" class="text-[14px] font-semibold text-apple-800 dark:text-apple-100 hover:underline">{{ nextAction.label }}</a>
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
+    <div class="flex flex-col gap-5">
+      {% call ui.card('Checklist') %}
+        <div class="flex flex-col">
+          {% for row in rows %}
+            <div class="flex items-center gap-2.5 py-1.5 text-[14px] border-b border-steel-100 dark:border-steel-800 last:border-0">
+              <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded {{ 'bg-apple-600' if row.complete else 'border-[1.5px] border-steel-300 dark:border-steel-600' }}">
+                {% if row.complete %}
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M20 6 9 17l-5-5" /></svg>
+                {% endif %}
+              </span>
+              <span class="{{ 'text-[#222] dark:text-[#efefef]' if row.complete else 'text-steel-500' }}">{{ row.label }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endcall %}
+
+      {% call ui.card('Log') %}
+        {% if character.log.length == 0 %}
+          <p class="text-[13.5px] text-steel-400">No changes logged yet.</p>
+        {% else %}
+          <div class="flex flex-col gap-3">
+            {% for entry in character.log %}
+              <div class="text-[13px]">
+                <div class="font-semibold text-[#222] dark:text-[#efefef]">{{ entry.timestamp }} — {{ entry.title }}</div>
+                <div class="text-steel-500">{{ entry.result }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endcall %}
+
+      <form method="post" action="/characters/{{ character.slug }}/delete" onsubmit="return confirm('Delete {{ character.name }}? This cannot be undone.');">
+        {{ ui.button('Delete character', 'danger') }}
+      </form>
+    </div>
+
+    <div class="flex flex-col gap-5">
+      {% call ui.card('Images') %}
+        {% if character.images.length == 0 %}
+          <p class="text-[13.5px] text-steel-400 mb-4">No assets yet — assets appear here once generation begins.</p>
+        {% else %}
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {% for image in character.images %}
+              <div>
+                <div class="aspect-square placeholder-photo rounded-md flex items-center justify-center"></div>
+                <div class="text-[12px] font-semibold mt-1 truncate">{{ image.label }}</div>
+                {% if image.path %}<div class="text-[11px] font-mono text-steel-400 truncate">{{ image.path }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endcall %}
+
+      {% call ui.card('Identity block') %}
+        {% if character.identityBlock %}
+          <pre class="whitespace-pre-wrap font-mono text-[13px] text-steel-700 dark:text-steel-200">{{ character.identityBlock }}</pre>
+          {% if character.identityBlockFrozen %}
+            <div class="mt-2">{{ ui.pill('frozen', 'green') }}</div>
+          {% endif %}
+        {% else %}
+          <p class="text-[13.5px] italic text-steel-400">
+            Complete the spec to generate the identity block — it compiles automatically as fields are filled in.
+          </p>
+        {% endif %}
+      {% endcall %}
+    </div>
+  </div>
+{% endblock %}

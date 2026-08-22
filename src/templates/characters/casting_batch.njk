@@ -1,0 +1,64 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Casting Batch'}]) }}
+  <div class="flex items-center justify-between mb-5">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-black tracking-tight">Casting — Batch</h1>
+      {{ ui.statusBadge(character.status) }}
+    </div>
+    {{ ui.mono(character.castingCandidates.length ~ ' candidates') }}
+  </div>
+
+  <form method="post" action="/characters/{{ character.slug }}/casting/batch/candidates" class="mb-6">
+    {% call ui.card() %}
+      <div class="flex items-end gap-3 flex-wrap">
+        <div>
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="startSeed">Starting seed</label>
+          <input id="startSeed" name="startSeed" type="number" required
+            class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono w-48" />
+        </div>
+        <div>
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="count">Count (8–16)</label>
+          <input id="count" name="count" type="number" min="1" max="16" value="8"
+            class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] w-28" />
+        </div>
+        {{ ui.button('Queue Candidates') }}
+      </div>
+      <p class="text-[12.5px] text-steel-500 mt-3">
+        Each candidate is a separate request with its own literal seed — never a shared batch latent.
+      </p>
+    {% endcall %}
+  </form>
+
+  {% if character.castingCandidates.length == 0 %}
+    <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-8 text-center text-steel-500">
+      No candidates queued yet.
+    </div>
+  {% else %}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {% for candidate in character.castingCandidates %}
+        <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden">
+          <div class="aspect-[3/4] placeholder-photo"></div>
+          <div class="p-2.5">
+            {{ ui.mono('seed ' + candidate.seed) }}
+            {% if character.winnerCandidateSeed == candidate.seed %}
+              <div class="mt-1">{{ ui.pill('winner', 'green') }}</div>
+            {% else %}
+              <form method="post" action="/characters/{{ character.slug }}/casting/candidates/{{ candidate.seed }}/select" class="mt-1.5">
+                <button type="submit" class="text-[12px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Select as winner</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if character.winnerCandidateSeed %}
+    <div class="mt-5">
+      <a href="/characters/{{ character.slug }}/casting/winner-audit" class="text-[14px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Continue to Winner Audit →</a>
+    </div>
+  {% endif %}
+{% endblock %}

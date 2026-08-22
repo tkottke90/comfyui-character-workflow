@@ -1,0 +1,73 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Refinement'}]) }}
+  <div class="flex items-center gap-3 mb-5">
+    <h1 class="text-xl font-black tracking-tight">Refinement Chain</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+
+  <form method="post" action="/characters/{{ character.slug }}/refinement">
+    <div class="flex items-center gap-4 mb-6">
+      {% set steps = [[1, 'Face detail'], [2, 'Cleanup'], [3, 'Upscale']] %}
+      {% for num, label in steps %}
+        <div class="flex items-center gap-2">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-bold
+            {{ 'bg-apple-600 text-white' if num <= character.refinement.currentStep else 'bg-steel-100 text-steel-500 dark:bg-steel-800' }}">
+            {% if num < character.refinement.currentStep %}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5" /></svg>
+            {% else %}{{ num }}{% endif %}
+          </span>
+          <span class="text-[13.5px] font-semibold">{{ label }}</span>
+        </div>
+        {% if not loop.last %}<div class="w-8 h-px bg-steel-300 dark:bg-steel-700"></div>{% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+      <div>
+        <div class="text-[11.5px] font-bold uppercase tracking-wider text-steel-500 mb-2">Input</div>
+        <div class="aspect-[3/4] placeholder-photo rounded-lg"></div>
+      </div>
+      <div>
+        <div class="text-[11.5px] font-bold uppercase tracking-wider text-apple-700 dark:text-apple-300 mb-2">Output preview</div>
+        <div class="aspect-[3/4] placeholder-photo rounded-lg border-apple-300"></div>
+      </div>
+
+      {% call ui.card() %}
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="faceDetailDenoise">Face detail denoise</label>
+        <input id="faceDetailDenoise" name="faceDetailDenoise" type="range" min="0.2" max="0.6" step="0.01"
+          value="{{ character.refinement.faceDetailDenoise }}" data-range-output="#faceDetailReadout"
+          class="w-full mb-1 accent-apple-600" />
+        <div id="faceDetailReadout" class="font-mono text-[13px] text-steel-500 mb-4"></div>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="cleanupDenoise">Cleanup denoise</label>
+        <input id="cleanupDenoise" name="cleanupDenoise" type="range" min="0.2" max="0.45" step="0.01"
+          value="{{ character.refinement.cleanupDenoise }}" data-range-output="#cleanupReadout"
+          class="w-full mb-1 accent-apple-600" />
+        <div id="cleanupReadout" class="font-mono text-[13px] text-steel-500 mb-4"></div>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="upscaleTarget">Upscale target (px, long edge)</label>
+        <input id="upscaleTarget" name="upscaleTarget" type="number" min="1024" step="128"
+          value="{{ character.refinement.upscaleTarget }}"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4" />
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="currentStep">Current step</label>
+        <select id="currentStep" name="currentStep" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4">
+          <option value="1" {% if character.refinement.currentStep == 1 %}selected{% endif %}>1 · Face detail</option>
+          <option value="2" {% if character.refinement.currentStep == 2 %}selected{% endif %}>2 · Cleanup</option>
+          <option value="3" {% if character.refinement.currentStep == 3 %}selected{% endif %}>3 · Upscale</option>
+        </select>
+
+        {{ ui.button('Accept & Continue') }}
+      {% endcall %}
+    </div>
+
+    {% call ui.card('Checklist') %}
+      {% for item in items %}
+        {{ ui.checkrow('checklist[' + item.id + ']', checklist['refinement.' + item.id], item.label) }}
+      {% endfor %}
+    {% endcall %}
+  </form>
+{% endblock %}
