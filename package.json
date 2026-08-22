@@ -1,0 +1,30 @@
+{
+  "name": "comfyui-character",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tkottke90/comfyui-character-workflow.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tkottke90/comfyui-character-workflow/issues"
+  },
+  "homepage": "https://github.com/tkottke90/comfyui-character-workflow#readme",
+  "dependencies": {
+    "@tkottke/hateos-url-manager": "1.3.0",
+    "@tkottke90/config-manager": "1.1.1",
+    "@tkottke90/logger": "2.4.0",
+    "express": "5.2.1"
+  }
+}
