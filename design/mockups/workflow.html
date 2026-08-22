@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anchor — Flow Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Source+Code+Pro:wght@400;600&display=swap">
+<style>
+:root{
+  --color-apple-100:#e7f5e3;--color-apple-300:#aad79e;--color-apple-600:#458336;--color-apple-800:#305328;
+  --color-steel-blue-50:#f5f7fa;--color-steel-blue-100:#eaeef4;--color-steel-blue-200:#d0dbe7;--color-steel-blue-300:#a6bcd3;--color-steel-blue-500:#587fa7;--color-steel-blue-600:#426287;--color-steel-blue-700:#364f6e;
+  --color-success-100:#dcf2e4;--color-success-600:#22824a;--color-success-700:#1c6a3e;
+  --bg:var(--color-steel-blue-50);--fg:#222;--fg-muted:var(--color-steel-blue-500);--fg-subtle:#a6bcd3;
+  --surface-card:#ffffff;--border:var(--color-steel-blue-200);--border-strong:var(--color-steel-blue-300);
+  --accent:var(--color-apple-600);--accent-soft-bg:var(--color-apple-100);--accent-soft-fg:var(--color-apple-800);--accent-soft-border:var(--color-apple-300);
+  --info-soft-bg:var(--color-steel-blue-100);--info-soft-fg:var(--color-steel-blue-700);
+  --success-soft-bg:var(--color-success-100);--success-soft-fg:var(--color-success-700);
+  --font-sans:'Source Sans 3',ui-sans-serif,system-ui,sans-serif;--font-mono:'Source Code Pro',ui-monospace,'SF Mono',monospace;
+  --shadow-card:0 1px 2px rgba(29,38,52,.06);
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;}
+h1,h3{font-weight:900;letter-spacing:-0.01em;margin:0;}
+.mono{font-family:var(--font-mono);}
+.chip{background:var(--surface-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-card);padding:14px 18px;min-width:200px;}
+.chip h3{font-size:15px;color:var(--fg);}
+.chip p{margin:6px 0 0;font-size:12.5px;color:var(--fg-muted);line-height:1.5;}
+.phaselabel{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.06em;white-space:nowrap;background:var(--accent-soft-bg);color:var(--accent-soft-fg);border:1px solid var(--accent-soft-border);border-radius:999px;padding:3px 11px;text-align:center;}
+.arrow-r{color:var(--border-strong);flex:none;}
+.arrow-d{color:var(--border-strong);margin:2px 0;}
+.row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+</style>
+</head>
+<body>
+<div style="width:1700px;padding:56px 64px 64px;display:flex;flex-direction:column;gap:0;">
+
+  <div style="margin-bottom:36px;">
+    <div class="mono" style="color:var(--fg-subtle);font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;margin-bottom:8px;">Character Workflow Utility</div>
+    <h1 style="font-size:30px;">How a character moves through the system</h1>
+    <p style="margin:10px 0 0;color:var(--fg-muted);font-size:14.5px;max-width:760px;line-height:1.6;">
+      A process map, not a gate — every stage below can be revisited after the fact. Each card is a real screen
+      (see the <b style="color:var(--fg);">Screens</b> page). This is the same sequence as the design
+      document's progress model, §8.
+    </p>
+  </div>
+
+  <!-- entry -->
+  <div class="row">
+    <div class="chip" style="background:var(--color-steel-blue-50);">
+      <h3>Character List</h3>
+      <p>Open an existing character, or start a blank one.</p>
+    </div>
+  </div>
+  <div class="arrow-d" style="padding-left:24px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+  </div>
+
+  <!-- phase 1 -->
+  <div class="row" style="margin-bottom:6px;">
+    <div class="phaselabel" style="width:150px;">① Draft</div>
+    <div class="chip"><h3>Spec Builder</h3><p>Structured attributes compile into the frozen identity block live.</p></div>
+  </div>
+  <div class="arrow-d" style="padding-left:174px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+  </div>
+
+  <!-- phase 2 -->
+  <div class="row" style="margin-bottom:6px;">
+    <div class="phaselabel" style="width:150px;">② Casting</div>
+    <div class="chip"><h3>Casting</h3><p>Pre-flight, then a seed-sweep batch — live gallery, one exact seed each.</p></div>
+    <div class="arrow-r"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg></div>
+    <div class="chip"><h3>Winner Audit &amp; Lock</h3><p>Forced side-by-side check vs. spec before a seed can freeze.</p></div>
+  </div>
+  <div class="arrow-d" style="padding-left:174px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+  </div>
+
+  <!-- phase 3 -->
+  <div class="row" style="margin-bottom:6px;">
+    <div class="phaselabel" style="width:150px;">③ Refinement</div>
+    <div class="chip" style="min-width:420px;">
+      <h3>Refinement Chain</h3>
+      <p>One screen, three internal steps on the same image — face detail → cleanup → upscale.</p>
+    </div>
+  </div>
+  <div class="arrow-d" style="padding-left:174px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+  </div>
+
+  <!-- phase 4 -->
+  <div class="row" style="margin-bottom:6px;">
+    <div class="phaselabel" style="width:150px;">④ Anchor kit</div>
+    <div class="chip"><h3>Face Crop</h3><p>Adjustable suggestion. Becomes the only face reference downstream.</p></div>
+    <div class="arrow-r"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg></div>
+    <div class="chip"><h3>View Generation</h3><p>One card per view — reorientation is always an explicit choice.</p></div>
+    <div class="arrow-r"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg></div>
+    <div class="chip"><h3>Polish &amp; Fixes</h3><p>Fixes stay locked until polish is accepted on that asset.</p></div>
+  </div>
+  <div class="arrow-d" style="padding-left:174px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+  </div>
+
+  <!-- phase 5 -->
+  <div class="row" style="margin-bottom:6px;">
+    <div class="phaselabel" style="width:150px;">⑤ Kit-complete</div>
+    <div class="chip"><h3>Downstream Validation</h3><p>Three throwaway checks: new pose, new outfit, no template.</p></div>
+    <div class="arrow-r"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg></div>
+    <div class="chip"><h3>Dataset &amp; Training</h3><p>Tracked here; the campaign and training run outside this tool for now.</p></div>
+  </div>
+  <div class="arrow-d" style="padding-left:174px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+  </div>
+
+  <div class="row">
+    <div class="phaselabel" style="width:150px;">⑥ Done</div>
+    <div class="chip" style="border-color:var(--success-soft-fg);background:var(--success-soft-bg);"><h3 style="color:var(--success-soft-fg);">lora-trained</h3><p style="color:var(--success-soft-fg);opacity:.85;">Adapter stack retired for this character.</p></div>
+  </div>
+
+  <!-- side node -->
+  <div style="margin-top:44px;padding-top:28px;border-top:1px dashed var(--border-strong);">
+    <div class="row" style="align-items:flex-start;">
+      <div class="chip" style="border-style:dashed;min-width:260px;">
+        <h3>Template Library</h3>
+        <p>Not part of this line at all — uploaded once, reused from Casting and View Generation by every character after it.</p>
+      </div>
+      <div style="max-width:640px;padding-top:6px;">
+        <div style="font-size:13px;color:var(--fg-muted);line-height:1.7;">
+          Three guarantees hold on every card above, not just one of them:
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+          <div class="mono" style="font-size:12px;color:var(--info-soft-fg);">→ nothing is final until it's accepted into the character file</div>
+          <div class="mono" style="font-size:12px;color:var(--info-soft-fg);">→ every screen shows what can be done next — never assumed, never remembered</div>
+          <div class="mono" style="font-size:12px;color:var(--info-soft-fg);">→ any card can be revisited later; this is a progress indicator, not a gate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
