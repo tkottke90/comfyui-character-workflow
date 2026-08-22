@@ -1,0 +1,57 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Winner Audit'}]) }}
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="text-xl font-black tracking-tight">Winner Audit</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+  {% if character.winnerCandidateSeed %}
+    <div class="mb-5">{{ ui.mono('candidate · seed ' + character.winnerCandidateSeed) }}</div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
+    <div class="aspect-[3/4] max-h-[440px] placeholder-photo rounded-lg"></div>
+
+    <form method="post" action="/characters/{{ character.slug }}/casting/winner-audit">
+      {% call ui.card('Attribute-by-attribute vs. spec') %}
+        <div class="flex flex-col gap-3">
+          {% for row in rows %}
+            <div class="flex items-start gap-3 pb-3 border-b border-steel-100 dark:border-steel-800 last:border-0">
+              <input type="hidden" name="rows[{{ loop.index0 }}][attribute]" value="{{ row.attribute }}" />
+              <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full mt-1 {{ 'bg-success-600' if row.ok else 'bg-rose-600' }}">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                  {% if row.ok %}<path d="M20 6 9 17l-5-5" />{% else %}<path d="M18 6 6 18M6 6l12 12" />{% endif %}
+                </svg>
+              </span>
+              <div class="flex-1">
+                <div class="text-[13.5px] font-semibold mb-1">{{ row.attribute }}</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <input name="rows[{{ loop.index0 }}][specValue]" value="{{ row.specValue }}" placeholder="spec says…"
+                    class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" />
+                  <input name="rows[{{ loop.index0 }}][imageValue]" value="{{ row.imageValue }}" placeholder="image shows…"
+                    class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" />
+                </div>
+              </div>
+              <label class="flex items-center gap-1.5 text-[12px] text-steel-500 mt-1 shrink-0">
+                <input type="checkbox" name="rows[{{ loop.index0 }}][ok]" {% if row.ok %}checked{% endif %} class="h-3.5 w-3.5 accent-apple-600" />
+                matches
+              </label>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="mt-4">{{ ui.button('Save Audit', 'secondary') }}</div>
+      {% endcall %}
+    </form>
+  </div>
+
+  <form method="post" action="/characters/{{ character.slug }}/casting/lock" class="mt-5">
+    {{ ui.button('Lock This Seed') }}
+    {% if rows | selectattr('ok', 'equalto', false) | list | length > 0 %}
+      <p class="text-[13px] text-rose-600 mt-2">Resolve the flagged attribute above to continue.</p>
+    {% elif not character.winnerCandidateSeed %}
+      <p class="text-[13px] text-steel-500 mt-2">Select a winning candidate from the Casting Batch first.</p>
+    {% endif %}
+  </form>
+{% endblock %}

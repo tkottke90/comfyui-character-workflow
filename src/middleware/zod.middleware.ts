@@ -3,7 +3,6 @@ import { ZodObject, ZodRawShape, z, ZodError } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 import { BadRequestError } from '../errors/http.errors';
 
-
 export function ZodBodyValidator<T extends ZodRawShape>(schema: ZodObject<T>) {
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
@@ -73,10 +72,7 @@ export function ZodParamValidator<T extends ZodRawShape>(schema: ZodObject<T>) {
 export function ZodIdValidator(idField = 'id') {
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
-      (req.params as any)[idField] = z
-        .coerce
-        .number()
-        .parse(req.params[idField]) as any;
+      (req.params as any)[idField] = z.coerce.number().parse(req.params[idField]) as any;
       next();
     } catch (err) {
       let message = 'Query Format Error';

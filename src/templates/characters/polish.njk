@@ -1,0 +1,61 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Polish · ' + view.label}]) }}
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="text-xl font-black tracking-tight">Polish &amp; Targeted Fixes</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+  <div class="mb-5">{{ ui.mono('editing: ' + view.label) }}</div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+    <div class="aspect-[3/4] max-h-[460px] placeholder-photo rounded-lg"></div>
+
+    <form method="post" action="/characters/{{ character.slug }}/kit/polish/{{ view.key }}">
+      {% call ui.card('1 · Polish' + (' — accepted' if polish.accepted else '')) %}
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="denoise">Denoise</label>
+        <input id="denoise" name="denoise" type="range" min="0.15" max="0.3" step="0.01" value="{{ polish.denoise }}"
+          data-range-output="#denoiseReadout" class="w-full mb-1 accent-apple-600" />
+        <div id="denoiseReadout" class="font-mono text-[13px] text-steel-500 mb-3"></div>
+
+        <label class="flex items-center gap-2.5 mb-3">
+          <input type="checkbox" name="eyesChecked" {% if polish.eyesChecked %}checked{% endif %} class="h-4 w-4 rounded accent-apple-600" />
+          <span class="text-[13.5px]">Zoomed into the eyes — checked</span>
+        </label>
+
+        <label class="flex items-center gap-2.5 mb-3">
+          <input type="checkbox" name="accepted" {% if polish.accepted %}checked{% endif %} class="h-4 w-4 rounded accent-apple-600" />
+          <span class="text-[13.5px] font-semibold">Accept Polish</span>
+        </label>
+        {% if not polish.eyesChecked %}
+          <p class="text-[12.5px] text-steel-500 mb-3">Check the eyes before accepting unlocks the fix below.</p>
+        {% endif %}
+      {% endcall %}
+
+      <div class="mt-5 {{ 'opacity-50 pointer-events-none' if not polish.accepted }}">
+        {% call ui.card('2 · Targeted Fix') %}
+          <div class="flex items-center gap-4 mb-3 text-[13px]">
+            <label class="flex items-center gap-1.5"><input type="radio" name="fixMode" value="remove" {% if polish.fixMode == 'remove' %}checked{% endif %} class="accent-apple-600" /> remove</label>
+            <label class="flex items-center gap-1.5"><input type="radio" name="fixMode" value="add" {% if polish.fixMode == 'add' %}checked{% endif %} class="accent-apple-600" /> add</label>
+          </div>
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="fixDescription">Describe what replaces the masked area</label>
+          <textarea id="fixDescription" name="fixDescription" rows="2"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px] mb-3">{{ polish.fixDescription }}</textarea>
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="brushSize">Brush size (px)</label>
+          <input id="brushSize" name="brushSize" type="number" value="{{ polish.brushSize }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px] mb-3" />
+
+          <label class="flex items-center gap-2.5 mb-3">
+            <input type="checkbox" name="fixApplied" {% if polish.fixApplied %}checked{% endif %} class="h-4 w-4 rounded accent-apple-600" />
+            <span class="text-[13.5px]">Fix applied</span>
+          </label>
+        {% endcall %}
+      </div>
+
+      <div class="mt-4">{{ ui.button('Save') }}</div>
+    </form>
+  </div>
+{% endblock %}

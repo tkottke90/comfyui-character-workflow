@@ -1,0 +1,90 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Spec Builder'}]) }}
+  <h1 class="text-xl font-black tracking-tight mb-5">Specification</h1>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+    <form method="post" action="/characters/{{ character.slug }}/spec" data-character-name="{{ character.name }}">
+      {% call ui.card() %}
+        {% if character.identityBlockFrozen %}
+          <p class="text-[13px] text-steel-500 mb-4">The identity block is frozen — attribute edits below no longer recompile it.</p>
+        {% endif %}
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4 mb-5">
+          {% set fields = [
+            ['sex', 'Sex / presentation'], ['apparent_age', 'Apparent age'], ['ethnicity', 'Ethnicity / origin'],
+            ['skin_tone', 'Skin tone'], ['face_shape', 'Face shape'], ['eyes', 'Eyes'],
+            ['eyebrows', 'Eyebrows'], ['hair', 'Hair'], ['nose', 'Nose'],
+            ['lips', 'Lips'], ['build', 'Build / body shape'], ['height_impression', 'Height impression'],
+            ['base_clothing', 'Base clothing (anchor)']
+          ] %}
+          {% for key, label in fields %}
+            <div>
+              <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="attr-{{ key }}">{{ label }}</label>
+              <input id="attr-{{ key }}" name="attributes[{{ key }}]" type="text" data-spec-field="{{ key }}"
+                value="{{ character.attributes[key] }}"
+                class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px]" />
+            </div>
+          {% endfor %}
+        </div>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="body_template">Body template</label>
+        <select id="body_template" name="body_template" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-5">
+          <option value="">— none —</option>
+          {% for template in templates %}
+            <option value="{{ template.name }}" {% if character.body_template == template.name %}selected{% endif %}>{{ template.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="flex items-center gap-2.5 mb-5">
+          <input type="checkbox" name="useNameAsToken" data-use-name-token {% if character.useNameAsToken %}checked{% endif %} class="h-4 w-4 rounded accent-apple-600" />
+          <span class="text-[14px]">
+            Use name as identity token
+            <span class="block text-[12.5px] text-steel-500">Biases toward a distinct face — becomes frozen prompt content once cast.</span>
+          </span>
+        </label>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="negativePrompt">Negative guards</label>
+        <textarea id="negativePrompt" name="negativePrompt" rows="3"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13px] font-mono mb-5">{{ character.negativePrompt }}</textarea>
+
+        {{ ui.button('Save Character') }}
+      {% endcall %}
+    </form>
+
+    <div class="flex flex-col gap-5">
+      {% call ui.card('Distinguishing features') %}
+        {% if character.distinguishingFeatures.length == 0 %}
+          <p class="text-[13px] text-steel-400 mb-3">None recorded.</p>
+        {% else %}
+          <ul class="flex flex-col gap-2 mb-3">
+            {% for feature in character.distinguishingFeatures %}
+              <li class="flex items-start justify-between gap-2 text-[13.5px]">
+                <span>{{ feature.text }} <span class="text-steel-400 italic">({{ feature.size }})</span></span>
+                <form method="post" action="/characters/{{ character.slug }}/spec/features/{{ loop.index0 }}/delete">
+                  <button type="submit" class="text-rose-600 hover:underline text-[12px]">remove</button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        <form method="post" action="/characters/{{ character.slug }}/spec/features" class="flex flex-col gap-2">
+          <input name="text" type="text" placeholder="e.g. Small keloid scar, right jawline, ~1cm"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px]" />
+          <select name="size" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px]">
+            <option value="easy">easy</option>
+            <option value="medium" selected>medium</option>
+            <option value="hard">hard</option>
+          </select>
+          <button type="submit" class="text-[13px] font-semibold text-apple-700 dark:text-apple-300 text-left hover:underline">+ Add feature</button>
+        </form>
+      {% endcall %}
+
+      {% call ui.card('Identity block · live preview') %}
+        <pre data-identity-preview class="whitespace-pre-wrap font-mono text-[12.5px] text-steel-600 dark:text-steel-300">{{ previewIdentityBlock }}</pre>
+      {% endcall %}
+    </div>
+  </div>
+{% endblock %}

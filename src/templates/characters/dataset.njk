@@ -1,0 +1,54 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Dataset & Training'}]) }}
+  <div class="flex items-center gap-3 mb-6">
+    <h1 class="text-xl font-black tracking-tight">Dataset &amp; Training Tracking</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+
+  <form method="post" action="/characters/{{ character.slug }}/dataset">
+    <div class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 mb-5">
+      {% call ui.card('Dataset images') %}
+        <div class="font-mono text-[15px] mb-2">{{ character.dataset.imagesCount }} / {{ character.dataset.targetMin }}–{{ character.dataset.targetMax }}</div>
+        <div class="h-2 rounded-full bg-steel-100 dark:bg-steel-800 overflow-hidden mb-4">
+          {% set pctRaw = (character.dataset.imagesCount / character.dataset.targetMax * 100) | round %}
+          {% set pct = 100 if pctRaw > 100 else pctRaw %}
+          <div class="h-full bg-apple-600" style="width: {{ pct }}%"></div>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[12px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="imagesCount">Count</label>
+            <input id="imagesCount" name="imagesCount" type="number" value="{{ character.dataset.imagesCount }}"
+              class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2 py-1.5 text-[13.5px]" />
+          </div>
+          <div>
+            <label class="block text-[12px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="targetMin">Min</label>
+            <input id="targetMin" name="targetMin" type="number" value="{{ character.dataset.targetMin }}"
+              class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2 py-1.5 text-[13.5px]" />
+          </div>
+          <div>
+            <label class="block text-[12px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="targetMax">Max</label>
+            <input id="targetMax" name="targetMax" type="number" value="{{ character.dataset.targetMax }}"
+              class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2 py-1.5 text-[13.5px]" />
+          </div>
+        </div>
+      {% endcall %}
+
+      {% call ui.card('Checklist') %}
+        {{ ui.checkrow('_readonly', checklist['dataset.images_generated'], '20-40 varied images generated via adapter stack', true) }}
+        {{ ui.checkrow('checklist[curated]', checklist['dataset.curated'], 'Dataset curated (bad likenesses culled)') }}
+        {{ ui.checkrow('checklist[lora_trained]', checklist['dataset.lora_trained'], 'LoRA trained') }}
+        {{ ui.checkrow('checklist[lora_tested]', checklist['dataset.lora_tested'], 'LoRA tested against anchor kit') }}
+      {% endcall %}
+    </div>
+
+    {% call ui.card('Training notes') %}
+      <textarea name="notes" rows="3" placeholder="Campaign generation and training happen outside this tool for now — record a link or note here once they do."
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px]">{{ character.dataset.notes }}</textarea>
+    {% endcall %}
+
+    <div class="mt-4">{{ ui.button('Save Dataset Tracking') }}</div>
+  </form>
+{% endblock %}

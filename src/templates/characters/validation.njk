@@ -1,0 +1,40 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% set tests = [
+  ['newPose', 'New Pose Test', 'Likeness holds with FaceID at weight 0.7–0.8'],
+  ['newOutfit', 'New Outfit Test', 'No clothing bleed from reference'],
+  ['noTemplateProportions', 'No-Template Proportions', 'Proportions hold without the silhouette template']
+] %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Downstream Validation'}]) }}
+  <div class="flex items-center gap-3 mb-6">
+    <h1 class="text-xl font-black tracking-tight">Downstream Validation</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+
+  <form method="post" action="/characters/{{ character.slug }}/validation">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-4">
+      {% for key, label, hint in tests %}
+        {% set test = character.downstreamValidation[key] %}
+        {% call ui.card(label) %}
+          <div class="aspect-[4/3] placeholder-photo rounded-md mb-3 flex items-center justify-center text-steel-400 text-[11px]">
+            {% if test.status == 'not-run' %}not yet run{% endif %}
+          </div>
+          <select name="{{ key }}[status]" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px] mb-2">
+            <option value="not-run" {% if test.status == 'not-run' %}selected{% endif %}>not run</option>
+            <option value="pass" {% if test.status == 'pass' %}selected{% endif %}>pass</option>
+            <option value="fail" {% if test.status == 'fail' %}selected{% endif %}>fail</option>
+          </select>
+          <textarea name="{{ key }}[note]" rows="2" placeholder="{{ hint }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px]">{{ test.note }}</textarea>
+        {% endcall %}
+      {% endfor %}
+    </div>
+    {{ ui.button('Save Validation') }}
+  </form>
+
+  <p class="text-[12.5px] text-steel-500 mt-4">
+    Nothing here is filed as a kit asset — only the pass / fail state feeds back into the checklist.
+  </p>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "layout.njk" %}
+{% set section = "templates" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Templates', href: '/templates'}, {label: template.name}]) }}
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="text-xl font-black tracking-tight">{{ template.name }}</h1>
+    {{ ui.pill(template.type, 'blue') }}
+  </div>
+  <div class="mb-6">{{ ui.mono('uploaded ' + template.createdAt + (' · ' + template.filename if template.filename else '')) }}</div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+    <div class="aspect-square max-w-md placeholder-photo rounded-lg flex items-center justify-center">
+      {% if template.filename %}
+        <img src="/uploads/templates/{{ template.filename }}" class="max-h-full max-w-full object-contain" alt="{{ template.name }}" />
+      {% endif %}
+    </div>
+
+    <div class="flex flex-col gap-5">
+      {% call ui.card('Used by ' + usedBy.length + ' character' + ('' if usedBy.length == 1 else 's')) %}
+        {% if usedBy.length == 0 %}
+          <p class="text-[13px] text-steel-400">Not used by any character yet.</p>
+        {% else %}
+          <div class="flex flex-col gap-1.5">
+            {% for character in usedBy %}
+              <a href="/characters/{{ character.slug }}" class="flex items-center gap-2 text-[13.5px] hover:underline">
+                <span class="h-1.5 w-1.5 rounded-full bg-apple-600"></span>{{ character.name }}
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endcall %}
+
+      {% call ui.card('Notes') %}
+        <form method="post" action="/templates/{{ template.slug }}/notes">
+          <textarea name="notes" rows="4" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px] mb-3">{{ template.notes }}</textarea>
+          {{ ui.button('Save notes', 'secondary') }}
+        </form>
+      {% endcall %}
+
+      <div class="flex flex-col gap-2" data-file-upload>
+        <form method="post" action="/templates/{{ template.slug }}/replace-image">
+          <input type="hidden" name="imageDataUrl" value="" />
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1">Replace image</label>
+          <input type="file" accept="image/png,image/jpeg,image/webp" class="text-[13px] mb-2" />
+          <button type="submit" class="w-full rounded-md border border-steel-300 dark:border-steel-700 px-4 py-2 text-[14px] font-semibold text-steel-600 dark:text-steel-200 hover:bg-steel-50 dark:hover:bg-steel-800">Replace image</button>
+        </form>
+      </div>
+
+      <form method="post" action="/templates/{{ template.slug }}/delete" onsubmit="return confirm('Remove {{ template.name }}? This cannot be undone.');">
+        {{ ui.button('Remove template', 'danger') }}
+      </form>
+    </div>
+  </div>
+{% endblock %}

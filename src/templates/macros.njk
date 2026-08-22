@@ -1,0 +1,69 @@
+{% macro statusBadge(status) %}
+  {% set label = {
+    'draft': 'Draft',
+    'casting': 'Casting',
+    'locked': 'Locked',
+    'kit-complete': 'Kit-complete',
+    'lora-trained': 'LoRA-trained'
+  } %}
+  {% set tone = {
+    'draft': 'bg-steel-100 text-steel-600 border-steel-200 dark:bg-steel-800 dark:text-steel-300 dark:border-steel-700',
+    'casting': 'bg-steel-100 text-steel-700 border-steel-200 dark:bg-steel-800 dark:text-steel-200 dark:border-steel-700',
+    'locked': 'bg-apple-100 text-apple-800 border-apple-300 dark:bg-apple-900 dark:text-apple-200 dark:border-apple-700',
+    'kit-complete': 'bg-success-100 text-success-700 border-success-500/30 dark:bg-[#12301e] dark:text-[#7fd0a0]',
+    'lora-trained': 'bg-success-100 text-success-700 border-success-500/30 dark:bg-[#12301e] dark:text-[#7fd0a0]'
+  } %}
+  <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold {{ tone[status] }}">{{ label[status] }}</span>
+{% endmacro %}
+
+{% macro pill(text, kind='neutral') %}
+  {% set tone = {
+    'neutral': 'bg-steel-100 text-steel-600 dark:bg-steel-800 dark:text-steel-300',
+    'blue': 'bg-steel-100 text-steel-700 dark:bg-steel-800 dark:text-steel-200',
+    'green': 'bg-apple-100 text-apple-800 dark:bg-apple-900 dark:text-apple-200',
+    'success': 'bg-success-100 text-success-700 dark:bg-[#12301e] dark:text-[#7fd0a0]',
+    'danger': 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+  } %}
+  <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold {{ tone[kind] }}">{{ text }}</span>
+{% endmacro %}
+
+{% macro crumbs(items) %}
+  <nav class="text-[13.5px] text-steel-400 mb-4">
+    {% for item in items %}
+      {%- if not loop.last -%}
+        <a href="{{ item.href }}" class="hover:text-steel-600 dark:hover:text-steel-200">{{ item.label }}</a>
+        <span class="mx-1.5">&rsaquo;</span>
+      {%- else -%}
+        <span class="font-semibold text-[#222] dark:text-[#efefef]">{{ item.label }}</span>
+      {%- endif -%}
+    {% endfor %}
+  </nav>
+{% endmacro %}
+
+{% macro card(label='') %}
+  <div class="bg-white dark:bg-steel-900 border border-steel-200 dark:border-steel-800 rounded-lg shadow-[0_1px_2px_rgba(29,38,52,.06)] p-5">
+    {% if label %}
+      <div class="text-[11.5px] font-bold uppercase tracking-wider text-steel-500 dark:text-steel-400 mb-3">{{ label }}</div>
+    {% endif %}
+    {{ caller() }}
+  </div>
+{% endmacro %}
+
+{% macro checkrow(name, checked, label, disabled=false) %}
+  <label class="flex items-start gap-2.5 py-1.5 text-[14px] {{ 'opacity-50' if disabled else 'cursor-pointer' }}">
+    <input type="checkbox" name="{{ name }}" {% if checked %}checked{% endif %} {% if disabled %}disabled{% endif %}
+      class="mt-0.5 h-4 w-4 shrink-0 rounded accent-apple-600" />
+    <span class="{{ 'text-steel-400 dark:text-steel-500' if not checked else 'text-[#222] dark:text-[#efefef]' }}">{{ label }}</span>
+  </label>
+{% endmacro %}
+
+{% macro mono(text) %}<span class="font-mono text-[13px] text-steel-500 dark:text-steel-400">{{ text }}</span>{% endmacro %}
+
+{% macro button(text, kind='primary', type='submit') %}
+  {% set classes = {
+    'primary': 'bg-apple-600 hover:bg-apple-700 text-white',
+    'secondary': 'bg-white hover:bg-steel-50 text-steel-600 border border-steel-300 dark:bg-steel-900 dark:border-steel-700 dark:text-steel-200',
+    'danger': 'bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 dark:bg-steel-900 dark:border-rose-800 dark:text-rose-300'
+  } %}
+  <button type="{{ type }}" class="inline-flex items-center justify-center rounded-md px-4 py-2 text-[14px] font-semibold transition-colors {{ classes[kind] }}">{{ text }}</button>
+{% endmacro %}

@@ -1,0 +1,36 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-black tracking-tight">Characters</h1>
+    <a href="/characters/new" class="inline-flex items-center rounded-md px-4 py-2 text-[14px] font-semibold bg-apple-600 hover:bg-apple-700 text-white">
+      + New Character
+    </a>
+  </div>
+
+  {% if characters.length == 0 %}
+    <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-10 text-center text-steel-500">
+      No characters yet — create one to start the pipeline.
+    </div>
+  {% else %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {% for character in characters %}
+        <a href="/characters/{{ character.slug }}" class="block rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden hover:shadow-md transition-shadow">
+          <div class="aspect-[3/4] placeholder-photo flex items-center justify-center text-steel-400 text-xs">
+            {% if character.status == 'draft' %}not generated yet{% endif %}
+          </div>
+          <div class="p-3">
+            <div class="font-bold text-[14.5px] mb-1">{{ character.name }}</div>
+            {{ ui.statusBadge(character.status) }}
+            <div class="font-mono text-[12px] text-steel-400 mt-1.5">
+              updated {{ character.updated }}
+              {% if character.locked_seed %} · seed {{ character.locked_seed }}{% endif %}
+              {% if character.resolution %} · {{ character.resolution }}{% endif %}
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

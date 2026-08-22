@@ -1,0 +1,43 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Casting'}]) }}
+  <div class="flex items-center gap-3 mb-5">
+    <h1 class="text-xl font-black tracking-tight">Casting — Pre-flight</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+    <div>
+      <div class="aspect-[2/3] max-h-[520px] placeholder-photo rounded-lg flex items-end justify-center p-3">
+        {% if character.locked_seed %}{{ ui.mono('seed ' + character.locked_seed + ' · locked') }}{% endif %}
+      </div>
+    </div>
+
+    <form method="post" action="/characters/{{ character.slug }}/casting/preflight">
+      {% call ui.card() %}
+        <div class="mb-4">
+          {% for item in items %}
+            {{ ui.checkrow('checklist[' + item.id + ']', checklist['preflight.' + item.id], item.label) }}
+          {% endfor %}
+        </div>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="heroPath">Control image path / seed note</label>
+        <input id="heroPath" name="heroPath" type="text" value="{{ heroPath }}"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13.5px] mb-4" />
+
+        <div class="flex items-center justify-between text-[13.5px] mb-4">
+          <span class="font-semibold text-steel-600 dark:text-steel-300">Batch size</span>
+          {{ ui.mono('8–16 candidates') }}
+        </div>
+
+        {{ ui.button('Save Pre-flight') }}
+      {% endcall %}
+    </form>
+  </div>
+
+  <div class="mt-5">
+    <a href="/characters/{{ character.slug }}/casting/batch" class="text-[14px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Continue to Casting Batch →</a>
+  </div>
+{% endblock %}

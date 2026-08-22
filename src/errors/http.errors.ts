@@ -2,7 +2,7 @@ import { BaseError } from '@tkottke90/js-errors';
 
 export class HttpError extends BaseError {
   statusCode: number = 500;
-  
+
   constructor(message: string) {
     super(message);
     this.name = 'HttpError';

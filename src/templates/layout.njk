@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anchor{% if title %} — {{ title }}{% endif %}</title>
+  <link rel="icon" href="/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;0,900;1,400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'media',
+      theme: {
+        extend: {
+          colors: {
+            apple: {
+              50: '#f5faf3', 100: '#e7f5e3', 200: '#d0e9c9', 300: '#aad79e', 400: '#7cbc6c',
+              500: '#62b04f', 600: '#458336', 700: '#39672e', 800: '#305328', 900: '#294423', 950: '#11250e'
+            },
+            steel: {
+              50: '#f5f7fa', 100: '#eaeef4', 200: '#d0dbe7', 300: '#a6bcd3', 400: '#7698ba',
+              500: '#587fa7', 600: '#426287', 700: '#364f6e', 800: '#30445c', 900: '#2c3b4e', 950: '#1d2634'
+            },
+            rose: {
+              50: '#fcf5f4', 100: '#f9ebea', 200: '#f4d8d7', 300: '#eab9b7', 400: '#de908e',
+              500: '#ce6464', 600: '#b8464b', 700: '#9a363d', 800: '#822f38', 900: '#702b34', 950: '#3d1419'
+            },
+            success: { 100: '#dcf2e4', 500: '#2e9e5b', 600: '#22824a', 700: '#1c6a3e' }
+          },
+          fontFamily: {
+            sans: ['"Source Sans 3"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"Source Code Pro"', 'ui-monospace', 'SFMono-Regular', 'monospace']
+          },
+          borderRadius: { sm: '6px', md: '8px', lg: '10px', xl: '14px' }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body class="flex min-h-screen bg-steel-50 dark:bg-steel-950 text-[#222] dark:text-[#efefef] font-sans text-[15px] leading-[1.55]">
+  {% include "partials/sidebar.njk" %}
+  <main class="flex-1 min-w-0 px-6 py-6 md:px-10 md:py-8">
+    <div class="max-w-[1000px]">
+      {% if error %}
+        <div class="mb-5 rounded-lg border border-rose-300 bg-rose-50 dark:bg-rose-950 dark:border-rose-800 px-4 py-3 text-[14px] text-rose-800 dark:text-rose-300">
+          {{ error }}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
