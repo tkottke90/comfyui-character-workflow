@@ -1,0 +1,1 @@
+import {} from '@tkottke/hateos-url-manager';
