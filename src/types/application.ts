@@ -9,7 +9,7 @@ declare global {
       /**
        * Starts the HTTP server and begins listening for incoming requests.
        */
-      start: () => void;
+      start: (callback?: (app: Application) => void) => void;
 
       /**
        * Initiates a graceful shutdown: stops background services, closes the HTTP

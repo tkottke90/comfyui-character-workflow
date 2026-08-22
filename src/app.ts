@@ -7,6 +7,7 @@ import { createAPI } from './controllers';
 import HttpEventMiddleware from './middleware/http.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { NotFoundError } from './errors/http.errors';
+import { Application } from './types/application';
 
 export function App() {
   const app = express();
@@ -36,10 +37,12 @@ export function App() {
   app.use(errorHandler);
 
   // Functions
-  app.start = () => {
+  app.start = (callback?: (app: Application) => void) => {
     const port = app.config.getNumber('port', 3000);
     app.listen(port, () => {
       app.logger.info(`Server listening on port ${port}`);
+
+      if (callback) callback(app);
     });
   };
   app.shutdown = (code = 1) => {

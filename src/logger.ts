@@ -1,19 +1,20 @@
 import { Application } from 'express';
-import { configureFromSchema } from '@tkottke90/logger';
+import { configureFromSchema, LoggerConfigSchema } from '@tkottke90/logger';
 import path from 'node:path';
 
 export function createLogger(app: Application) {
-  const logDir = app.config.getConfigDir('log')
-  
+  const logConfig = LoggerConfigSchema.parse(app.config.get('logging'))
+
+  if (logConfig.file?.log?.filename) {
+    logConfig.file.log.filename = path.resolve(app.config.getConfigDir(), logConfig.file.log.filename)
+  }
+
+  if (logConfig.file?.error?.filename) {
+    logConfig.file.error.filename = path.resolve(app.config.getConfigDir(), logConfig.file.error.filename)
+  }
+
   app.logger = configureFromSchema(
     'comfyui-character',
-    {
-      level: 'info',
-      console: { enabled: true },
-      file: {
-        log: { filename: path.resolve(logDir, 'app.jsonl') },
-        error: { filename: path.resolve(logDir, 'error.jsonl') }
-      }
-    }
+    logConfig
   )
 }
