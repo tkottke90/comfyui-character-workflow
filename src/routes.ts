@@ -6,6 +6,6 @@ in JSON API Responses.
 
 */
 
-import { Route } from '@tkottke/hateos-url-manager';
+// import { Route } from '@tkottke/hateos-url-manager';
 
-const v1API = new Route('/api/v1');
+// const v1API = new Route('/api/v1');
