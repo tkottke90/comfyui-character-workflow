@@ -192,3 +192,35 @@ export function defaultAuditRows(attributes: Attributes): AuditRow[] {
 export function findImagePath(images: Character['images'], label: string): string {
   return images.find((image) => image.label === label)?.path ?? '';
 }
+
+/**
+ * Merges the built-in default autocomplete suggestions with any user-configured
+ * `character-attributes` values from config.yaml. Configured values supplement the
+ * defaults (deduped) rather than replacing them; keys with no built-in defaults are
+ * passed through as-is.
+ */
+export function mergeAttributeSuggestions(
+  defaults: Record<string, string[]>,
+  configured: Record<string, string[]>,
+): Record<string, string[]> {
+  const keys = new Set([...Object.keys(defaults), ...Object.keys(configured)]);
+  const merged: Record<string, string[]> = {};
+
+  for (const key of keys) {
+    const defaultValues = defaults[key] ?? [];
+    const configuredValues = configured[key] ?? [];
+    const seen = new Set<string>();
+    const values: string[] = [];
+
+    for (const value of [...defaultValues, ...configuredValues]) {
+      if (!seen.has(value)) {
+        seen.add(value);
+        values.push(value);
+      }
+    }
+
+    merged[key] = values;
+  }
+
+  return merged;
+}

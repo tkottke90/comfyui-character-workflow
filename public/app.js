@@ -70,6 +70,86 @@
     recompute();
   }
 
+  // ---- Spec Builder: attribute autocomplete + clear button ----
+  document.querySelectorAll('[data-autocomplete]').forEach(function (wrapper) {
+    var input = wrapper.querySelector('input');
+    var list = wrapper.querySelector('[data-autocomplete-list]');
+    var clearBtn = wrapper.querySelector('[data-autocomplete-clear]');
+    if (!input || !list) return;
+
+    var suggestions = [];
+    try {
+      suggestions = JSON.parse(wrapper.getAttribute('data-suggestions') || '[]');
+    } catch (err) {
+      suggestions = [];
+    }
+
+    var MAX_RESULTS = 20;
+
+    var closeList = function () {
+      list.classList.add('hidden');
+      list.innerHTML = '';
+    };
+
+    var updateClearButton = function () {
+      if (!clearBtn) return;
+      clearBtn.classList.toggle('hidden', input.value.length === 0);
+    };
+
+    var renderList = function () {
+      var query = input.value.trim().toLowerCase();
+      var matches = suggestions.filter(function (value) {
+        return value.toLowerCase().indexOf(query) !== -1;
+      });
+
+      if (matches.length === 0) {
+        closeList();
+        return;
+      }
+
+      list.innerHTML = '';
+      matches.slice(0, MAX_RESULTS).forEach(function (value) {
+        var item = document.createElement('li');
+        item.textContent = value;
+        item.setAttribute('data-autocomplete-option', '');
+        item.className =
+          'px-3 py-1.5 cursor-pointer hover:bg-steel-100 dark:hover:bg-steel-700 text-[#222] dark:text-[#efefef]';
+        item.addEventListener('mousedown', function (event) {
+          event.preventDefault();
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          closeList();
+          updateClearButton();
+        });
+        list.appendChild(item);
+      });
+      list.classList.remove('hidden');
+    };
+
+    input.addEventListener('input', function () {
+      renderList();
+      updateClearButton();
+    });
+    input.addEventListener('focus', renderList);
+    input.addEventListener('blur', closeList);
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeList();
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+        closeList();
+        updateClearButton();
+      });
+    }
+
+    updateClearButton();
+  });
+
   // ---- File -> base64 data URL upload (no server-side multipart parser) ----
   document.querySelectorAll('[data-file-upload]').forEach(function (wrapper) {
     var input = wrapper.querySelector('input[type="file"]');

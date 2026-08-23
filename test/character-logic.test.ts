@@ -8,6 +8,7 @@ import {
   deriveStatus,
   findImagePath,
   getNextAction,
+  mergeAttributeSuggestions,
   overviewChecklistRows,
   parsePhaseChecklist,
   slugify,
@@ -62,6 +63,26 @@ describe('compileIdentityBlock', () => {
     const noSex = AttributesSchema.parse({ ethnicity: 'French' });
     const block = compileIdentityBlock('X', false, noSex);
     expect(block).to.include('french person');
+  });
+});
+
+describe('mergeAttributeSuggestions', () => {
+  it('supplements defaults with configured values, deduped', () => {
+    const merged = mergeAttributeSuggestions(
+      { sex: ['Male', 'Female'] },
+      { sex: ['Female', 'Non-binary'] },
+    );
+    expect(merged.sex).to.deep.equal(['Male', 'Female', 'Non-binary']);
+  });
+
+  it('passes through keys with no built-in defaults', () => {
+    const merged = mergeAttributeSuggestions({}, { custom_field: ['One', 'Two'] });
+    expect(merged.custom_field).to.deep.equal(['One', 'Two']);
+  });
+
+  it('keeps default-only keys unchanged when nothing is configured', () => {
+    const merged = mergeAttributeSuggestions({ hair: ['Black', 'Blonde'] }, {});
+    expect(merged.hair).to.deep.equal(['Black', 'Blonde']);
   });
 });
 
