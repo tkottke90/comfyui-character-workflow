@@ -76,6 +76,7 @@
     var hidden = wrapper.querySelector('input[type="hidden"]');
     var preview = wrapper.querySelector('[data-file-preview]');
     var label = wrapper.querySelector('[data-file-label]');
+    var filenameField = wrapper.querySelector('[data-file-name]');
     if (!input || !hidden) return;
 
     var handleFile = function (file) {
@@ -88,6 +89,7 @@
           preview.classList.remove('hidden');
         }
         if (label) label.textContent = file.name;
+        if (filenameField) filenameField.value = file.name;
       };
       reader.readAsDataURL(file);
     };
