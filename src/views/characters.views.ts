@@ -1,15 +1,19 @@
 import { Router, Request, Response } from 'express';
+import { Application } from '../types/application';
 import { CharactersService } from '../services/characters.service';
 import { TemplatesService } from '../services/templates.service';
 import { CharacterRecord } from '../schemas/character.schema';
+import { CharacterAttributesConfigSchema } from '../schemas/config.schema';
 import { NotFoundError, BadRequestError } from '../errors/http.errors';
 import { CHECKLIST_DEFINITIONS } from '../checklist/definitions';
+import { DEFAULT_ATTRIBUTE_SUGGESTIONS } from '../lib/character-attribute-defaults';
 import {
   compileIdentityBlock,
   defaultAuditRows,
   deriveChecklist,
   findImagePath,
   getNextAction,
+  mergeAttributeSuggestions,
   overviewChecklistRows,
   parsePhaseChecklist,
   DEFAULT_NEGATIVE_PROMPT,
@@ -77,6 +81,7 @@ function baseContext(character: CharacterRecord) {
 }
 
 export function createCharactersRouter(
+  app: Application,
   characters: CharactersService,
   templates: TemplatesService,
 ): Router {
@@ -118,6 +123,10 @@ export function createCharactersRouter(
 
   router.get('/:slug/spec', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
+    const configuredSuggestions = app.config.loadConfig(
+      'character-attributes',
+      CharacterAttributesConfigSchema,
+    );
     res.render('characters/spec.njk', {
       ...baseContext(character),
       templates: templates.list(),
@@ -125,6 +134,10 @@ export function createCharactersRouter(
         character.name,
         character.useNameAsToken,
         character.attributes,
+      ),
+      attributeSuggestions: mergeAttributeSuggestions(
+        DEFAULT_ATTRIBUTE_SUGGESTIONS,
+        configuredSuggestions,
       ),
     });
   });

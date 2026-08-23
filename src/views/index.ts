@@ -23,7 +23,7 @@ export function createViews(app: Application) {
   app.use('/uploads/templates', express.static(templatesService.uploadsDir));
 
   app.get('/', (_req, res) => res.redirect('/characters'));
-  app.use('/characters', createCharactersRouter(charactersService, templatesService));
+  app.use('/characters', createCharactersRouter(app, charactersService, templatesService));
   app.use('/templates', createTemplatesRouter(templatesService, charactersService));
   app.use('/integration', createIntegrationRouter(app, workflowMappingService));
 }

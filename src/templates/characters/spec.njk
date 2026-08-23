@@ -23,9 +23,21 @@
           {% for key, label in fields %}
             <div>
               <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="attr-{{ key }}">{{ label }}</label>
-              <input id="attr-{{ key }}" name="attributes[{{ key }}]" type="text" data-spec-field="{{ key }}"
-                value="{{ character.attributes[key] }}"
-                class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px]" />
+              {% if attributeSuggestions[key] and attributeSuggestions[key].length > 0 %}
+                <div class="relative" data-autocomplete data-suggestions="{{ attributeSuggestions[key] | dump }}">
+                  <input id="attr-{{ key }}" name="attributes[{{ key }}]" type="text" data-spec-field="{{ key }}"
+                    value="{{ character.attributes[key] }}" autocomplete="off"
+                    class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 pl-3 pr-8 py-2 text-[14px]" />
+                  <button type="button" data-autocomplete-clear tabindex="-1"
+                    class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-steel-400 hover:text-steel-600 dark:hover:text-steel-200 text-[13px] leading-none px-1">✕</button>
+                  <ul data-autocomplete-list
+                    class="hidden absolute z-10 mt-1 w-full max-h-48 overflow-auto rounded-md border border-steel-300 dark:border-steel-700 bg-white dark:bg-steel-800 shadow-lg text-[13.5px]"></ul>
+                </div>
+              {% else %}
+                <input id="attr-{{ key }}" name="attributes[{{ key }}]" type="text" data-spec-field="{{ key }}"
+                  value="{{ character.attributes[key] }}"
+                  class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px]" />
+              {% endif %}
             </div>
           {% endfor %}
         </div>
