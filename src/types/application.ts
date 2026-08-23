@@ -72,6 +72,15 @@ declare global {
          * @throws An error if the config key is not found or if validation fails
          */
         loadConfig<T>(key: string, schema: T): T extends z.ZodTypeAny ? z.infer<T> : unknown;
+
+        /**
+         * Validates a value against the matching top-level section of ConfigSchema (if one
+         * exists for that key), applies it to the in-memory config, and persists only the
+         * schema-shaped sections back to config.yaml.
+         * @param key The top-level config section to update (e.g. 'comfy-ui')
+         * @param value The new value for that section
+         */
+        updateSection(key: string, value: unknown): void;
       };
       logger: Logger;
     }

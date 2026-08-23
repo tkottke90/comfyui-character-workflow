@@ -1,0 +1,238 @@
+{% extends "layout.njk" %}
+{% set section = "integration" %}
+{% set subsection = "workflow-mapping" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Integration', href: '/integration/connection'}, {label: 'Workflow Mapping', href: '/integration/workflow-mapping'}, {label: slot.id}]) }}
+  {% include "partials/integration-subnav.njk" %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-[230px_1fr] gap-5 items-start">
+    <div class="flex flex-col gap-4">
+      {% call ui.card('Phase bindings') %}
+        {% for row in phaseBindings %}
+          <div class="py-1.5 border-b border-steel-200 dark:border-steel-800 last:border-0">
+            <div class="font-bold text-[12.5px] {{ 'text-apple-800 dark:text-apple-200' if row.slotId == slot.id }}">{{ row.label }}</div>
+            {% if row.fulfilled %}
+              <a href="/integration/workflow-mapping/{{ row.slotId }}" class="font-mono text-[12.5px] hover:underline {{ 'text-apple-700 dark:text-apple-300 font-bold' if row.slotId == slot.id else 'text-steel-500 dark:text-steel-400' }}">{{ row.slotId }}</a>
+            {% else %}
+              <div class="font-mono text-[12.5px] text-steel-400">— not configured —</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endcall %}
+
+      {% call ui.card(slot.id + ' — versions') %}
+        {% if not record.versions.length %}
+          <p class="text-[12.5px] text-steel-400">No versions imported yet.</p>
+        {% else %}
+          {% for v in record.versions | reverse %}
+            <a href="?version={{ v.version }}" class="flex justify-between items-center py-1.5 border-b border-steel-200 dark:border-steel-800 last:border-0 text-[12.5px] {{ 'font-bold' if version and v.version == version.version }}">
+              <span>v{{ v.version }}</span>
+              {% if v.active %}
+                {{ ui.pill('active', 'success') }}
+              {% elif version and v.version == version.version and not v.active %}
+                {{ ui.pill('viewing', 'blue') }}
+              {% else %}
+                <span class="text-steel-400">{{ v.importedAt | truncate(10, true, '') }}</span>
+              {% endif %}
+            </a>
+          {% endfor %}
+        {% endif %}
+      {% endcall %}
+    </div>
+
+    <div class="min-w-0">
+      <div class="flex items-start gap-3 mb-1">
+        <h1 class="text-lg font-black tracking-tight">{{ slot.id }} <span class="text-steel-400 font-semibold">— {{ slot.label }}</span>{% if version %} · v{{ version.version }}{% endif %}</h1>
+        {% if version and version.active %}{{ ui.pill('active', 'success') }}{% endif %}
+      </div>
+      <p class="text-[13px] text-steel-500 mb-4">{{ slot.description }}</p>
+
+      {% if not version %}
+        <div class="bg-white dark:bg-steel-900 border-2 border-dashed border-steel-300 dark:border-steel-700 rounded-xl p-10 text-center">
+          <p class="text-[13.5px] text-steel-500 mb-4">No version of this workflow has been imported yet.</p>
+          <form method="post" action="/integration/workflow-mapping/import" data-file-upload class="inline-block text-left">
+            <input type="hidden" name="workflowJsonDataUrl" value="" />
+            <input type="hidden" name="filename" data-file-name value="" />
+            <input type="hidden" name="slotId" value="{{ slot.id }}" />
+            <div class="rounded-lg border-2 border-dashed border-steel-300 dark:border-steel-700 px-8 py-5 flex flex-col items-center gap-2 cursor-pointer mb-3"
+                 onclick="this.querySelector('input[type=file]').click()">
+              <div class="text-[13px] font-semibold" data-file-label>Drag a workflow .json here, or click to browse</div>
+              <input type="file" accept="application/json" class="hidden" />
+            </div>
+            {{ ui.button('Import workflow (.json)') }}
+          </form>
+        </div>
+      {% else %}
+        <div class="flex items-center gap-3 mb-4">
+          <span class="text-[12px] text-steel-400 font-mono">{{ version.filename }} · imported {{ version.importedAt | truncate(10, true, '') }}</span>
+          <form method="post" action="/integration/workflow-mapping/import" data-file-upload class="ml-auto flex items-center gap-2">
+            <input type="hidden" name="workflowJsonDataUrl" value="" />
+            <input type="hidden" name="filename" data-file-name value="" />
+            <input type="hidden" name="slotId" value="{{ slot.id }}" />
+            <span class="text-[11.5px] text-steel-400" data-file-label>no file chosen</span>
+            <button type="button" onclick="this.closest('form').querySelector('input[type=file]').click()"
+              class="rounded-md border border-steel-300 dark:border-steel-700 px-3 py-1.5 text-[12px] font-bold text-steel-600 dark:text-steel-200 hover:bg-steel-50 dark:hover:bg-steel-800">
+              Choose file
+            </button>
+            <input type="file" accept="application/json" class="hidden" />
+            <button type="submit" class="rounded-md bg-apple-600 hover:bg-apple-700 text-white px-3 py-1.5 text-[12px] font-bold">Import new version</button>
+          </form>
+        </div>
+
+        {% if version.version == 1 %}
+          <div class="flex gap-2.5 items-start bg-steel-100 dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-lg px-3.5 py-2.5 text-[12.5px] text-steel-600 dark:text-steel-300 mb-4">
+            <strong>New import.</strong>&nbsp;This file has never been imported before, so every input below starts unmapped.
+          </div>
+        {% elif comfyUnreachable %}
+          <div class="flex gap-2.5 items-start bg-rose-50 dark:bg-rose-950 border border-rose-300 dark:border-rose-800 rounded-lg px-3.5 py-2.5 text-[12.5px] text-rose-700 dark:text-rose-300 mb-4">
+            ComfyUI is unreachable right now — static-value options and live verification aren't available until it's back.
+          </div>
+        {% else %}
+          <div class="flex gap-2.5 items-start bg-steel-100 dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-lg px-3.5 py-2.5 text-[12.5px] text-steel-600 dark:text-steel-300 mb-4">
+            <strong>Re-imported from a new export.</strong>&nbsp;Mappings were carried forward automatically by node id, falling back to node title where the id shifted. Anything left unmapped below needs to be resolved.
+          </div>
+        {% endif %}
+
+        {% if slot.phaseBindings.length %}
+          <div class="flex items-center gap-3 bg-white dark:bg-steel-900 border border-steel-300 dark:border-steel-700 rounded-lg px-3.5 py-3 mb-4">
+            <span class="text-[12.5px] font-bold whitespace-nowrap">Bind to phase<span class="text-rose-600 ml-0.5">*</span></span>
+            {% if version.boundPhaseSlotId == slot.id %}
+              <span class="text-[12.5px] text-apple-800 dark:text-apple-200 font-semibold">
+                ✓ Bound{% if slot.phaseBindings.length > 1 %} — fulfills {{ slot.phaseBindings | join(', ', 'label') }}{% else %} — fulfills {{ slot.phaseBindings[0].label }}{% endif %}
+              </span>
+            {% else %}
+              <form method="post" action="/integration/workflow-mapping/{{ slot.id }}/versions/{{ version.version }}/bind-phase">
+                <input type="hidden" name="slotId" value="{{ slot.id }}" />
+                {{ ui.button('Bind to ' + slot.phaseBindings[0].label, 'secondary') }}
+              </form>
+              {% if slot.phaseBindings.length > 1 %}
+                <span class="text-[11.5px] text-steel-400">also fulfills
+                  {%- for pb in slot.phaseBindings %}{% if not loop.first %} {{ pb.label }}{{ ',' if not loop.last }}{% endif %}{% endfor -%}
+                </span>
+              {% endif %}
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <div class="bg-white dark:bg-steel-900 border border-steel-200 dark:border-steel-800 rounded-lg shadow-sm overflow-hidden mb-4">
+          <div class="grid grid-cols-[1fr_120px_1fr_120px] gap-2.5 px-3.5 py-2 bg-steel-100 dark:bg-steel-800 text-[11px] font-bold uppercase tracking-wider text-steel-500 dark:text-steel-400">
+            <div>Node</div><div>Input</div><div>Maps to</div><div>Status</div>
+          </div>
+
+          {% for node in version.nodes %}
+            <div class="grid grid-cols-[1fr_120px_1fr_120px] gap-2.5 items-center px-3.5 py-2 border-b border-steel-200 dark:border-steel-800 text-[12.5px]">
+              <div>{{ node.nodeTitle }} <span class="font-mono text-steel-400">·{{ node.nodeId }}</span></div>
+              <div class="font-mono">{{ node.inputName }}</div>
+              <div class="truncate">
+                {% if node.sourceType == 'unset' %}
+                  <span class="italic text-steel-400">not mapped</span>
+                {% else %}
+                  <span class="font-mono text-[9.5px] font-bold uppercase tracking-wide bg-apple-100 text-apple-800 dark:bg-apple-900 dark:text-apple-200 rounded px-1.5 py-0.5 mr-1.5 whitespace-nowrap">{{ ui.sourceTypeLabel(node.sourceType) }}</span>{{ node.sourceValue }}
+                {% endif %}
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                {{ ui.mappingStatus(node.status) }}
+                <a href="?version={{ version.version }}&editing={{ node.nodeId }}:{{ node.inputName }}" class="text-[11px] font-semibold text-steel-400 hover:text-apple-700 dark:hover:text-apple-300">edit</a>
+              </div>
+            </div>
+
+            {% if editingKey == node.nodeId + ':' + node.inputName %}
+              <div class="px-3.5 py-4 bg-steel-50 dark:bg-steel-950 border-b border-dashed border-steel-300 dark:border-steel-700">
+                <div class="text-[10.5px] font-bold uppercase tracking-wider text-steel-500 dark:text-steel-400 mb-2.5">Edit mapping — {{ node.inputName }}</div>
+                <form method="post" action="/integration/workflow-mapping/{{ slot.id }}/versions/{{ version.version }}/nodes/{{ node.nodeId }}/{{ node.inputName }}">
+                  <label class="block text-[12px] font-semibold text-steel-600 dark:text-steel-300 mb-1">Source type</label>
+                  <select name="sourceType" class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px] font-mono mb-3">
+                    <option value="unset" {{ 'selected' if node.sourceType == 'unset' }}>Unset</option>
+                    <option value="domain" {{ 'selected' if node.sourceType == 'domain' }}>Domain field</option>
+                    <option value="computed" {{ 'selected' if node.sourceType == 'computed' }}>Computed</option>
+                    <option value="static" {{ 'selected' if node.sourceType == 'static' }}>Static value</option>
+                  </select>
+
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <div>
+                      <label class="block text-[11px] font-semibold text-steel-500 mb-1">If Domain field →</label>
+                      <select name="domainValue" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono">
+                        <option value="">— choose —</option>
+                        {% for field in domainFields %}
+                          <option value="{{ field.path }}" {{ 'selected' if node.sourceType == 'domain' and node.sourceValue == field.path }}>{{ field.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-semibold text-steel-500 mb-1">If Computed →</label>
+                      <input name="computedValue" type="text" placeholder="e.g. identity_block + view clause"
+                        value="{{ node.sourceValue if node.sourceType == 'computed' else '' }}"
+                        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px]" />
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-semibold text-steel-500 mb-1">If Static value →</label>
+                      {% if editingKey == node.nodeId + ':' + node.inputName and editingOptions.length %}
+                        <select name="staticValue" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono">
+                          <option value="">— choose —</option>
+                          {% for choice in editingOptions %}
+                            <option value="{{ choice }}" {{ 'selected' if node.sourceType == 'static' and node.sourceValue == choice }}>{{ choice }}</option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        <input name="staticValue" type="text" placeholder="exact filename / value"
+                          value="{{ node.sourceValue if node.sourceType == 'static' else '' }}"
+                          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono" />
+                        {% if comfyUnreachable %}<p class="text-[10.5px] text-steel-400 mt-1">ComfyUI unreachable — no live options to choose from.</p>{% endif %}
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-3">
+                    {{ ui.button('Save mapping') }}
+                    <a href="?version={{ version.version }}" class="text-[12.5px] font-semibold text-steel-500 hover:text-steel-700 dark:hover:text-steel-300">Cancel</a>
+                  </div>
+                </form>
+              </div>
+            {% endif %}
+          {% endfor %}
+
+          <div class="px-3.5 py-3 bg-steel-100 dark:bg-steel-800 text-[12.5px]">
+            <div class="flex items-center gap-3 flex-wrap">
+              <strong>Result output:</strong>
+              {% if version.resultOutput %}
+                {{ ui.mono(version.resultOutput.nodeId + ' → output ' + version.resultOutput.outputIndex + ' → ' + version.resultOutput.label) }}
+              {% else %}
+                <span class="italic text-steel-400">not yet assigned</span>
+              {% endif %}
+              <form method="post" action="/integration/workflow-mapping/{{ slot.id }}/versions/{{ version.version }}/result-output" class="flex items-center gap-2 ml-auto">
+                <input list="node-ids-{{ version.version }}" name="nodeId" placeholder="node id" value="{{ version.resultOutput.nodeId if version.resultOutput else '' }}"
+                  class="w-24 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-900 px-2 py-1 text-[12px] font-mono" />
+                <datalist id="node-ids-{{ version.version }}">
+                  {% for nodeId in uniqueNodeIds %}
+                    <option value="{{ nodeId }}"></option>
+                  {% endfor %}
+                </datalist>
+                <input name="outputIndex" type="number" min="0" placeholder="output #" value="{{ version.resultOutput.outputIndex if version.resultOutput else 0 }}"
+                  class="w-20 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-900 px-2 py-1 text-[12px] font-mono" />
+                <input name="label" type="text" placeholder="primary_result" value="{{ version.resultOutput.label if version.resultOutput else '' }}"
+                  class="w-32 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-900 px-2 py-1 text-[12px] font-mono" />
+                <button type="submit" class="rounded-md border border-steel-300 dark:border-steel-700 px-2.5 py-1 text-[11.5px] font-bold text-steel-600 dark:text-steel-200 hover:bg-white dark:hover:bg-steel-700">Set</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        {% if version.active %}
+          <p class="text-[12.5px] text-apple-700 dark:text-apple-300 font-semibold">This version is active for {{ slot.id }}.</p>
+        {% elif canActivate %}
+          <form method="post" action="/integration/workflow-mapping/{{ slot.id }}/versions/{{ version.version }}/activate">
+            {{ ui.button('Activate this version') }}
+          </form>
+        {% else %}
+          <div class="flex items-center gap-3">
+            <button type="button" disabled class="inline-flex items-center justify-center rounded-md px-4 py-2 text-[14px] font-semibold bg-steel-100 dark:bg-steel-800 text-steel-400 border border-steel-200 dark:border-steel-700 cursor-default">Activate this version</button>
+            <span class="text-[11.5px] text-steel-400">
+              {% if slot.phaseBindings.length %}Bind this workflow to a phase and{% endif %} map every input and set a result output before it can be activated.
+            </span>
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

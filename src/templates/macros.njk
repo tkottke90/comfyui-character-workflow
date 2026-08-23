@@ -59,6 +59,26 @@
 
 {% macro mono(text) %}<span class="font-mono text-[13px] text-steel-500 dark:text-steel-400">{{ text }}</span>{% endmacro %}
 
+{% macro sourceTypeLabel(sourceType) %}
+  {% set label = {
+    'unset': 'Unset',
+    'domain': 'Domain field',
+    'computed': 'Computed',
+    'static': 'Static value'
+  } %}
+  {{- label[sourceType] or sourceType -}}
+{% endmacro %}
+
+{% macro mappingStatus(status) %}
+  {% set config = {
+    'unmapped': {label: '○ not mapped', class: 'text-steel-400 dark:text-steel-500 font-semibold'},
+    'mapped': {label: '● mapped', class: 'text-steel-600 dark:text-steel-300 font-bold'},
+    'verified': {label: '✓ verified', class: 'text-success-700 dark:text-[#7fd0a0] font-bold'},
+    'missing': {label: '⚠ missing', class: 'text-rose-700 dark:text-rose-300 font-bold'}
+  } %}
+  <span class="text-[12.5px] whitespace-nowrap {{ config[status].class }}">{{ config[status].label }}</span>
+{% endmacro %}
+
 {% macro button(text, kind='primary', type='submit') %}
   {% set classes = {
     'primary': 'bg-apple-600 hover:bg-apple-700 text-white',

@@ -193,5 +193,23 @@ export default function initializeConfig(app: Application) {
 
       return configValue as T extends z.ZodTypeAny ? z.infer<T> : unknown;
     },
+
+    updateSection: function (key: string, value: unknown): void {
+      const shape = ConfigSchema.shape as Record<string, z.ZodTypeAny>;
+      const sectionSchema = shape[key];
+      const validatedValue = sectionSchema ? sectionSchema.parse(value) : value;
+
+      _.set(this._configData, key, validatedValue);
+
+      // Persist only the schema-shaped sections — this._configData also carries
+      // runtime-only fields (appVersion, appName, assetDir) added after boot that
+      // should never be written back into config.yaml.
+      const persisted: Record<string, unknown> = {};
+      for (const sectionKey of Object.keys(shape)) {
+        persisted[sectionKey] = this._configData[sectionKey];
+      }
+
+      saveConfig(this.configPath, persisted);
+    },
   };
 }

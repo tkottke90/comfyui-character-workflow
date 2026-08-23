@@ -1,0 +1,83 @@
+{% extends "layout.njk" %}
+{% set section = "integration" %}
+{% set subsection = "connection" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Integration', href: '/integration/connection'}, {label: 'Connection'}]) }}
+  {% include "partials/integration-subnav.njk" %}
+
+  <div class="flex items-center gap-3 mb-5">
+    <h1 class="text-xl font-black tracking-tight">ComfyUI Connection</h1>
+    {% if status.ok %}
+      {{ ui.pill('Connected', 'success') }}
+    {% else %}
+      {{ ui.pill('Unreachable', 'danger') }}
+    {% endif %}
+  </div>
+
+  {% if testResult == 'ok' %}
+    <div class="mb-5 rounded-lg border border-apple-300 bg-apple-50 dark:bg-apple-950 dark:border-apple-800 px-4 py-3 text-[13.5px] text-apple-800 dark:text-apple-200">
+      Connection test succeeded.
+    </div>
+  {% elif testResult == 'error' %}
+    <div class="mb-5 rounded-lg border border-rose-300 bg-rose-50 dark:bg-rose-950 dark:border-rose-800 px-4 py-3 text-[13.5px] text-rose-800 dark:text-rose-300">
+      Connection test failed{{ ': ' + testError if testError }}
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+    <form method="post" action="/integration/connection">
+      {% call ui.card('Connection settings — maps to comfy-ui in config.yaml') %}
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="baseUrl">Base URL</label>
+        <input id="baseUrl" name="baseUrl" type="text" required value="{{ baseUrl }}"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono mb-4" />
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="apiKey">
+          API key <span class="font-normal text-steel-400">(optional)</span>
+        </label>
+        <input id="apiKey" name="apiKey" type="password"
+          placeholder="{{ 'Set — leave blank to keep it' if hasApiKey else 'Not set' }}"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono mb-1" />
+        <p class="text-[11.5px] text-steel-400 mb-4">Leave blank if this ComfyUI instance doesn't require one, or to keep the current key.</p>
+
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="clientId">Client ID</label>
+        <input id="clientId" name="clientId" type="text" value="{{ clientId }}"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono mb-1" />
+        <p class="text-[11.5px] text-steel-400 mb-4">Identifies this app on ComfyUI's websocket for progress correlation. Regenerate only when migrating to a different ComfyUI server.</p>
+
+        {{ ui.button('Save connection') }}
+      {% endcall %}
+    </form>
+
+    <div class="flex flex-col gap-4">
+      {% call ui.card('Live status') %}
+        {% if status.ok %}
+          <div class="flex justify-between items-baseline py-1.5 border-b border-steel-200 dark:border-steel-800 text-[13.5px]">
+            <span class="text-steel-500 dark:text-steel-400 font-semibold">ComfyUI version</span>
+            {{ ui.mono(status.systemStats.comfyuiVersion) }}
+          </div>
+          <div class="flex justify-between items-baseline py-1.5 border-b border-steel-200 dark:border-steel-800 text-[13.5px]">
+            <span class="text-steel-500 dark:text-steel-400 font-semibold">Queue</span>
+            {{ ui.mono(status.queue.running + ' running, ' + status.queue.pending + ' pending') }}
+          </div>
+          {% if status.systemStats.gpuName %}
+            <div class="flex justify-between items-baseline py-1.5 border-b border-steel-200 dark:border-steel-800 text-[13.5px]">
+              <span class="text-steel-500 dark:text-steel-400 font-semibold">GPU / VRAM</span>
+              {{ ui.mono(status.systemStats.gpuName + (', ' + status.systemStats.vramUsedPct + '% used' if status.systemStats.vramUsedPct != undefined else '')) }}
+            </div>
+          {% endif %}
+        {% else %}
+          <p class="text-[13px] text-rose-700 dark:text-rose-300 py-1.5 border-b border-steel-200 dark:border-steel-800">Unreachable{{ ': ' + status.error if status.error }}</p>
+        {% endif %}
+        <div class="flex justify-between items-baseline py-1.5 text-[13.5px]">
+          <span class="text-steel-500 dark:text-steel-400 font-semibold">Workflows configured</span>
+          {{ ui.mono(progress.configured + ' / ' + progress.total) }}
+        </div>
+      {% endcall %}
+
+      <form method="post" action="/integration/connection/test">
+        {{ ui.button('Test connection', 'secondary') }}
+      </form>
+    </div>
+  </div>
+{% endblock %}
