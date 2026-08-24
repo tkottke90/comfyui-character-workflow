@@ -35,9 +35,9 @@ export function createViews(app: Application) {
   // Execution engine wiring — one shared ComfyUI client + one persistent socket
   // connection for the app's whole lifetime (not per-request, unlike the Integration
   // pages' own short-lived clients used only for read-only status/object_info calls).
-  // Reconnecting this socket when the comfy-ui config changes at runtime, and the
-  // retry/backoff policy for a dropped connection, are Phase 8's concern — this just
-  // gets a working connection up at boot.
+  // The socket reconnects itself with capped backoff on an unexpected drop; reconnecting
+  // it when the comfy-ui config changes at runtime is still out of scope — this just gets
+  // a working connection up at boot.
   const comfyConfig = app.config.loadConfig('comfy-ui', ComfyUiConfigSchema);
   const comfyClient = createComfyUIClient({
     baseUrl: comfyConfig.baseUrl,
@@ -61,6 +61,14 @@ export function createViews(app: Application) {
     clientId: comfyConfig.clientId,
   });
 
+  // Restart reconciliation: any job left queued/running belongs to a promptOwners entry
+  // that died with the previous process — without this, the persistent socket would never
+  // route future messages back to it again, leaving the UI stuck showing "running" forever.
+  // Fire-and-forget: shouldn't block the server from accepting requests while it runs.
+  executionService.reconcile().catch((err) => {
+    app.logger.error('Startup job reconciliation failed', err instanceof Error ? err : undefined);
+  });
+
   app.use('/uploads/templates', express.static(templatesService.uploadsDir));
 
   app.get('/', (_req, res) => res.redirect('/characters'));
@@ -76,5 +84,5 @@ export function createViews(app: Application) {
     ),
   );
   app.use('/templates', createTemplatesRouter(templatesService, charactersService));
-  app.use('/integration', createIntegrationRouter(app, workflowMappingService));
+  app.use('/integration', createIntegrationRouter(app, workflowMappingService, comfySocket));
 }

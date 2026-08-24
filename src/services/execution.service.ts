@@ -45,6 +45,14 @@ export interface ExecutionService {
   /** N independent /prompt submissions (startSeed + i), never one batched EmptyLatentImage
    *  call — see design doc §6. Always targets the 'casting_batch' phase binding. */
   submitCastingBatch(characterSlug: string, startSeed: number, count: number): Promise<SubmitBatchResult>;
+  /** Call once at process start, after the socket has been told to connect() — every job
+   *  left 'queued'/'running' in the store belongs to a promptOwners entry that died with
+   *  the previous process. Checks each one against /history: already completed there gets
+   *  resolved normally (through the same completion path a live socket message would use);
+   *  genuinely still in flight gets its promptOwners entry re-registered so this process's
+   *  socket connection keeps driving it; unreachable gets marked a connection error rather
+   *  than left "running" forever with nothing left able to update it. */
+  reconcile(): Promise<void>;
 }
 
 function slotIdForPhaseBinding(phaseBindingKey: string): string {
@@ -424,5 +432,93 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     return { promptIds };
   }
 
-  return { submitSingle, submitCastingBatch };
+  async function reconcileSingle(
+    characterSlug: string,
+    phaseBindingKey: string,
+    record: SingleJobRecord,
+  ): Promise<void> {
+    let historyEntry;
+    try {
+      historyEntry = await comfyClient.getHistoryEntry(record.promptId);
+    } catch (err) {
+      await jobStore.set(characterSlug, phaseBindingKey, {
+        ...record,
+        status: 'error',
+        error: {
+          kind: 'connection',
+          message: err instanceof Error ? err.message : 'Could not reach ComfyUI after a restart',
+        },
+      });
+      return;
+    }
+
+    if (historyEntry) {
+      await completeSingle(characterSlug, phaseBindingKey, record.promptId, record);
+      return;
+    }
+
+    // Not (yet) in history — the prompt is genuinely still in flight on ComfyUI's side,
+    // this process just lost track of it. Re-register so the socket's future messages for
+    // this prompt_id route back to it again, same as if the process had never restarted.
+    promptOwners.set(record.promptId, { characterSlug, phaseBindingKey });
+  }
+
+  async function reconcileBatchSubJob(
+    characterSlug: string,
+    phaseBindingKey: string,
+    record: { kind: 'batch'; submittedAt: string; subJobs: BatchSubJob[] },
+    subJob: BatchSubJob,
+  ): Promise<void> {
+    let historyEntry;
+    try {
+      historyEntry = await comfyClient.getHistoryEntry(subJob.promptId);
+    } catch (err) {
+      await jobStore.set(characterSlug, phaseBindingKey, {
+        ...record,
+        subJobs: record.subJobs.map((s) =>
+          s.promptId === subJob.promptId
+            ? {
+                ...s,
+                status: 'error' as const,
+                error: {
+                  kind: 'connection' as const,
+                  message: err instanceof Error ? err.message : 'Could not reach ComfyUI after a restart',
+                },
+              }
+            : s,
+        ),
+      });
+      return;
+    }
+
+    if (historyEntry) {
+      await completeBatchSubJob(characterSlug, phaseBindingKey, subJob.promptId, subJob.seed, record);
+      return;
+    }
+
+    promptOwners.set(subJob.promptId, { characterSlug, phaseBindingKey, seed: subJob.seed });
+  }
+
+  async function reconcile(): Promise<void> {
+    for (const { characterSlug, phaseBindingKey, record } of jobStore.listAll()) {
+      if (record.kind === 'single') {
+        if (record.status !== 'queued' && record.status !== 'running') continue;
+        await reconcileSingle(characterSlug, phaseBindingKey, record);
+        continue;
+      }
+
+      for (const subJob of record.subJobs) {
+        if (subJob.status !== 'queued' && subJob.status !== 'running') continue;
+        // Re-fetch fresh each iteration — an earlier sub-job in this same loop may have
+        // just rewritten this batch's record via jobStore.set().
+        const latest = jobStore.get(characterSlug, phaseBindingKey);
+        if (latest?.kind !== 'batch') continue;
+        const latestSubJob = latest.subJobs.find((s) => s.promptId === subJob.promptId);
+        if (!latestSubJob || (latestSubJob.status !== 'queued' && latestSubJob.status !== 'running')) continue;
+        await reconcileBatchSubJob(characterSlug, phaseBindingKey, latest, latestSubJob);
+      }
+    }
+  }
+
+  return { submitSingle, submitCastingBatch, reconcile };
 }

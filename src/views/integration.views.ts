@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { Application } from '../types/application';
 import { ComfyUiConfigSchema } from '../schemas/config.schema';
+import { ComfyUISocket } from '../services/comfyui-socket.service';
 import {
   createComfyUIClient,
   getObjectInfoChoices,
@@ -83,6 +84,7 @@ function emptyRecord(slotId: string): WorkflowMappingRecord {
 export function createIntegrationRouter(
   app: Application,
   workflowMapping: WorkflowMappingService,
+  comfySocket: ComfyUISocket,
 ): Router {
   const router = Router();
 
@@ -138,7 +140,17 @@ export function createIntegrationRouter(
       testError,
       freeResult,
       freeError,
+      wsStatus: {
+        connected: comfySocket.isConnected(),
+        exhausted: comfySocket.isExhausted(),
+        attempts: comfySocket.getReconnectAttempts(),
+      },
     });
+  });
+
+  router.post('/connection/ws-reset', (_req: Request, res: Response) => {
+    comfySocket.reset();
+    res.redirect('/integration/connection');
   });
 
   router.post('/connection', (req: Request, res: Response) => {

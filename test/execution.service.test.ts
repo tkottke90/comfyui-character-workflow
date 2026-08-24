@@ -482,4 +482,235 @@ describe('execution.service', () => {
       await jobStore.close();
     }
   });
+
+  describe('reconcile (restart reconciliation)', () => {
+    function setUpPolishMapping(workflowMapping: ReturnType<typeof createWorkflowMappingService>) {
+      const graph = {
+        '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+      };
+      const { version } = workflowMapping.importVersion(graph, 'polish.json', '008-Polish');
+      workflowMapping.bindPhase('008-Polish', version, '008-Polish');
+      // Node id '4' matches startStubComfyServer's fixed history-entry output key.
+      workflowMapping.setResultOutput('008-Polish', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+      workflowMapping.activateVersion('008-Polish', version);
+    }
+
+    it('resolves a job that actually completed while this process was down', async () => {
+      const charactersDir = path.join(dir, 'characters');
+      const characters = createCharactersService(charactersDir);
+      const character = characters.create({ name: 'Restart Test' });
+      const characterImages = createCharacterImagesService(charactersDir);
+      const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
+      setUpPolishMapping(workflowMapping);
+
+      const jobStore = createJobStore(path.join(dir, 'jobs'));
+      await jobStore.set(character.slug, 'polish', {
+        kind: 'single',
+        promptId: 'prompt-restart-done',
+        status: 'running',
+        progress: { value: 5, max: 10 },
+        resultPath: null,
+        error: null,
+        submittedAt: new Date().toISOString(),
+      });
+
+      const httpStub = await startStubComfyServer({
+        promptId: 'prompt-restart-done',
+        onUpload: () => undefined,
+        onPrompt: () => undefined,
+      });
+      const wsStub = await startStubWsServer();
+      const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
+      const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+
+      try {
+        const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
+        socket.connect();
+        await opened;
+
+        // A fresh service instance, exactly as boot would construct one — promptOwners
+        // starts empty, simulating that the process (and its in-memory map) restarted.
+        const executionService = createExecutionService({
+          workflowMapping,
+          characters,
+          characterImages,
+          comfyClient,
+          socket,
+          jobStore,
+          clientId: 'app-client',
+        });
+
+        await executionService.reconcile();
+
+        const resolved = jobStore.get(character.slug, 'polish');
+        expect(resolved?.kind).to.equal('single');
+        if (resolved?.kind === 'single') {
+          expect(resolved.status).to.equal('done');
+          expect(resolved.resultPath).to.be.a('string');
+          expect(
+            fs.existsSync(path.join(charactersDir, character.slug, resolved.resultPath as string)),
+          ).to.equal(true);
+        }
+      } finally {
+        socket.close();
+        await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
+        await httpStub.close();
+        await jobStore.close();
+      }
+    });
+
+    it('marks a job as a connection error when ComfyUI cannot be reached to check its status', async () => {
+      const charactersDir = path.join(dir, 'characters');
+      const characters = createCharactersService(charactersDir);
+      const character = characters.create({ name: 'Restart Unreachable' });
+      const characterImages = createCharacterImagesService(charactersDir);
+      const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
+      setUpPolishMapping(workflowMapping);
+
+      const jobStore = createJobStore(path.join(dir, 'jobs'));
+      await jobStore.set(character.slug, 'polish', {
+        kind: 'single',
+        promptId: 'prompt-restart-unreachable',
+        status: 'running',
+        progress: null,
+        resultPath: null,
+        error: null,
+        submittedAt: new Date().toISOString(),
+      });
+
+      const wsStub = await startStubWsServer();
+      // No HTTP stub server is started at all — every request to it fails outright.
+      const comfyClient = createComfyUIClient({ baseUrl: 'http://127.0.0.1:1' });
+      const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+
+      try {
+        const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
+        socket.connect();
+        await opened;
+
+        const executionService = createExecutionService({
+          workflowMapping,
+          characters,
+          characterImages,
+          comfyClient,
+          socket,
+          jobStore,
+          clientId: 'app-client',
+        });
+
+        await executionService.reconcile();
+
+        const resolved = jobStore.get(character.slug, 'polish');
+        expect(resolved?.kind).to.equal('single');
+        if (resolved?.kind === 'single') {
+          expect(resolved.status).to.equal('error');
+          expect(resolved.error?.kind).to.equal('connection');
+        }
+      } finally {
+        socket.close();
+        await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
+        await jobStore.close();
+      }
+    });
+
+    it('re-attaches a job still genuinely in flight, so future socket messages resolve it normally', async () => {
+      const charactersDir = path.join(dir, 'characters');
+      const characters = createCharactersService(charactersDir);
+      const character = characters.create({ name: 'Restart Still Running' });
+      const characterImages = createCharacterImagesService(charactersDir);
+      const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
+      setUpPolishMapping(workflowMapping);
+
+      const jobStore = createJobStore(path.join(dir, 'jobs'));
+      await jobStore.set(character.slug, 'polish', {
+        kind: 'single',
+        promptId: 'prompt-restart-inflight',
+        status: 'running',
+        progress: null,
+        resultPath: null,
+        error: null,
+        submittedAt: new Date().toISOString(),
+      });
+
+      // /history/:id for this prompt returns 200 with an empty object (no key for that
+      // prompt_id) while `historyReady` is false — ComfyUI's actual "not in history yet"
+      // shape, not a 404, so getHistoryEntry() must resolve to undefined rather than throw.
+      // Flips to a completed entry once the test's own "it actually finishes" step runs,
+      // so completeSingle's own history check (triggered by the socket message below)
+      // succeeds exactly as it would against a real ComfyUI instance.
+      let historyReady = false;
+      const stubServer = http.createServer((req, res) => {
+        const pathname = (req.url ?? '').split('?')[0];
+        if (req.method === 'GET' && pathname.startsWith('/history/')) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            historyReady
+              ? JSON.stringify({
+                  'prompt-restart-inflight': {
+                    outputs: { '4': { images: [{ filename: 'result.png', subfolder: '', type: 'output' }] } },
+                    status: { completed: true, statusStr: 'success' },
+                  },
+                })
+              : '{}',
+          );
+          return;
+        }
+        if (req.method === 'GET' && pathname === '/view') {
+          res.writeHead(200, { 'Content-Type': 'image/png' });
+          res.end(Buffer.from('fake-result-bytes'));
+          return;
+        }
+        res.writeHead(404).end('not found');
+      });
+      await new Promise<void>((resolve) => stubServer.listen(0, resolve));
+      const httpPort = (stubServer.address() as AddressInfo).port;
+      const httpStub = {
+        baseUrl: `http://127.0.0.1:${httpPort}`,
+        close: () => new Promise<void>((resolve) => stubServer.close(() => resolve())),
+      };
+      const wsStub = await startStubWsServer();
+      const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
+      const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+
+      try {
+        const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
+        socket.connect();
+        await opened;
+
+        const executionService = createExecutionService({
+          workflowMapping,
+          characters,
+          characterImages,
+          comfyClient,
+          socket,
+          jobStore,
+          clientId: 'app-client',
+        });
+
+        await executionService.reconcile();
+
+        // Not resolved yet — reconcile must not have marked it done or failed just because
+        // it wasn't in history.
+        const stillRunning = jobStore.get(character.slug, 'polish');
+        expect(stillRunning?.kind).to.equal('single');
+        if (stillRunning?.kind === 'single') expect(stillRunning.status).to.equal('running');
+
+        // The prompt actually finishes moments later — this only resolves if reconcile()
+        // re-registered promptOwners for it, since that map started empty this run.
+        historyReady = true;
+        wsStub.send({ type: 'executing', data: { node: null, prompt_id: 'prompt-restart-inflight' } });
+
+        const done = await waitUntil(() => {
+          const job = jobStore.get(character.slug, 'polish');
+          return job?.kind === 'single' && job.status === 'done' ? job : undefined;
+        });
+        expect(done.resultPath).to.be.a('string');
+      } finally {
+        socket.close();
+        await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
+        await httpStub.close();
+        await jobStore.close();
+      }
+    });
+  });
 });

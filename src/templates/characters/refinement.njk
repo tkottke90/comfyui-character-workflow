@@ -62,7 +62,12 @@
 
       {% if job and job.kind == 'single' and job.status == 'error' and job.error %}
         <div class="mt-2 rounded-md border border-rose-300 bg-rose-50 dark:bg-rose-950 dark:border-rose-800 px-3 py-2 text-[12.5px] text-rose-800 dark:text-rose-300">
-          {{ job.error.message }}
+          {% if job.error.kind == 'connection' %}
+            Lost the connection to ComfyUI mid-run: {{ job.error.message }}
+            <a href="/integration/connection" class="block mt-1 font-semibold underline">Check Connection →</a>
+          {% else %}
+            {{ job.error.message }}
+          {% endif %}
         </div>
       {% endif %}
 
