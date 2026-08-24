@@ -32,12 +32,57 @@ export interface TestConnectionResult {
   error?: string;
 }
 
+export type ComfyUploadType = 'input' | 'temp' | 'output';
+
+export interface UploadImageOptions {
+  subfolder?: string;
+  overwrite?: boolean;
+}
+
+export interface UploadImageResult {
+  name: string;
+  subfolder: string;
+  type: string;
+}
+
+export interface SubmitPromptResult {
+  promptId: string;
+}
+
+export interface HistoryOutputImage {
+  filename: string;
+  subfolder: string;
+  type: string;
+}
+
+export interface HistoryEntry {
+  outputs: Record<string, { images?: HistoryOutputImage[] }>;
+  status: {
+    completed: boolean;
+    statusStr?: string;
+    /** Raw status messages verbatim (e.g. ['execution_error', {...}]) — the execution
+     * engine reads failing-node/exception detail out of these rather than this client
+     * pre-guessing a fixed error shape ComfyUI doesn't formally document. */
+    messages?: unknown[];
+  };
+}
+
 export interface ComfyUIClient {
   getSystemStats(): Promise<SystemStats>;
   getQueueStatus(): Promise<QueueStatus>;
   getObjectInfo(classType?: string): Promise<ObjectInfo>;
   testConnection(): Promise<TestConnectionResult>;
   freeMemory(): Promise<void>;
+  uploadImage(
+    file: Buffer,
+    filename: string,
+    type: ComfyUploadType,
+    options?: UploadImageOptions,
+  ): Promise<UploadImageResult>;
+  submitPrompt(graph: unknown, clientId: string): Promise<SubmitPromptResult>;
+  getHistory(): Promise<Record<string, HistoryEntry>>;
+  getHistoryEntry(promptId: string): Promise<HistoryEntry | undefined>;
+  viewImage(filename: string, subfolder: string, type: string): Promise<Buffer>;
 }
 
 /**
@@ -188,5 +233,79 @@ export function createComfyUIClient(config: ComfyUIClientConfig): ComfyUIClient 
     await request('/free', { method: 'POST', body: { unload_models: true, free_memory: true } });
   }
 
-  return { getSystemStats, getQueueStatus, getObjectInfo, testConnection, freeMemory };
+  async function uploadImage(
+    file: Buffer,
+    filename: string,
+    type: ComfyUploadType,
+    options?: UploadImageOptions,
+  ): Promise<UploadImageResult> {
+    const form = new FormData();
+    form.set('image', new Blob([new Uint8Array(file)]), filename);
+    form.set('type', type);
+    if (options?.subfolder) form.set('subfolder', options.subfolder);
+    if (options?.overwrite !== undefined) form.set('overwrite', String(options.overwrite));
+
+    const headers: Record<string, string> = {};
+    if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+
+    // Deliberately not using request() here — FormData needs fetch to set its own
+    // multipart Content-Type (with boundary) itself, which request() always overrides
+    // with application/json whenever a body is present.
+    const response = await fetch(resolveUrl('/upload/image'), {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      throw new Error(`ComfyUI upload failed: ${response.status} ${response.statusText}`);
+    }
+
+    const raw = (await response.json()) as { name: string; subfolder?: string; type?: string };
+    return { name: raw.name, subfolder: raw.subfolder ?? '', type: raw.type ?? type };
+  }
+
+  async function submitPrompt(graph: unknown, clientId: string): Promise<SubmitPromptResult> {
+    const raw = await request<{ prompt_id: string }>('/prompt', {
+      method: 'POST',
+      body: { prompt: graph, client_id: clientId },
+    });
+    return { promptId: raw.prompt_id };
+  }
+
+  async function getHistory(): Promise<Record<string, HistoryEntry>> {
+    return request<Record<string, HistoryEntry>>('/history');
+  }
+
+  async function getHistoryEntry(promptId: string): Promise<HistoryEntry | undefined> {
+    const raw = await request<Record<string, HistoryEntry>>(
+      `/history/${encodeURIComponent(promptId)}`,
+    );
+    return raw[promptId];
+  }
+
+  async function viewImage(filename: string, subfolder: string, type: string): Promise<Buffer> {
+    const params = new URLSearchParams({ filename, subfolder, type });
+    const headers: Record<string, string> = {};
+    if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+
+    const response = await fetch(resolveUrl(`/view?${params.toString()}`), { headers });
+    if (!response.ok) {
+      throw new Error(`ComfyUI view failed: ${response.status} ${response.statusText}`);
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  return {
+    getSystemStats,
+    getQueueStatus,
+    getObjectInfo,
+    testConnection,
+    freeMemory,
+    uploadImage,
+    submitPrompt,
+    getHistory,
+    getHistoryEntry,
+    viewImage,
+  };
 }
