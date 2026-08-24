@@ -102,7 +102,29 @@ Today the mapping editor (`workflow-mapping-detail.njk`) offers the same domain-
 - **SSE, not blocking-wait.** Triggering a phase returns immediately with the page rendered in a loading state; a `text/event-stream` connection (per-page-scoped, e.g. `/characters/:slug/<phase>/events`) delivers the completion event.
 - **Reload-safe, duplicate-submit-proof.** A page reload while a job is in flight must not lose the pending result or allow a second submission. On (re)connection, the SSE endpoint must emit the *current* known status immediately (still running / done / errored), not only forward future transitions — otherwise a reload racing a just-finished job would leave the page stuck.
 - **Job state store: LMDB** (new dependency) — an embedded, memory-mapped, persistent key-value store, chosen over a bare in-memory `Map`/`Record` specifically because run history is wanted in the future (LMDB was chosen over SQLite/LevelDB/Keyv for read-speed; the user is fine adding the dependency since it directly drives UI correctness). Job state survives process restarts, so a stale "in progress" state can be reconciled against ComfyUI's `/history/{promptId}` rather than trusted blindly forever.
-- **Completion event is a plain signal**, not a payload carrying the result — the client does the equivalent of `location.reload()` on completion, consistent with the rest of this app's plain form-post/redirect pattern (no client-side framework or DOM patching exists today).
+- **Completion event is a plain signal for single-result phases**, not a payload carrying the result — the client does the equivalent of `location.reload()` on completion, consistent with the rest of this app's plain form-post/redirect pattern (no client-side framework or DOM patching exists today). **Casting batch is the exception to this rule** — see §9a.
+
+## 9a. Progress feedback
+
+ComfyUI's `/ws` carries real step-level progress, not just a done signal, and it's worth surfacing rather than leaving every run as an undifferentiated spinner. Confirmed message set per `prompt_id`:
+
+- `execution_start` — the prompt has begun
+- `executing` — `{node, prompt_id}`; fires as each node starts. **`node: null` is the authoritative "this prompt is fully finished" signal** — more reliable than watching for `executed`, which fires per *output* node and a workflow can have more than one
+- `progress` — `{value, max, node, prompt_id}` — step-level progress for whatever's currently sampling (e.g. `value: 12, max: 28` mid-`KSampler`)
+- `executed` — `{node, output, prompt_id}` — an output node produced something, carries the filename info used for the pull step (§8)
+- `execution_cached` — nodes skipped because their inputs didn't change (not surfaced to the UI, informational only)
+- `execution_error` — `{prompt_id, node_id, exception_message, ...}` — feeds directly into §8a's failure handling
+
+**Decision: build real progress bars (`value`/`max`), not just coarse status labels.** This requires a translation layer between the one server-side ComfyUI websocket connection and the per-page SSE streams: it maps each incoming `{value, max, node, prompt_id}` to whichever character/phase/sub-job owns that `prompt_id`, and the LMDB job record is extended to hold live progress state (not just a done/not-done boolean), so a page reload mid-run can redraw the progress bar where it actually was rather than resetting to an undifferentiated "loading."
+
+**Single-result phases** (e.g. `003-Cleanup`): one `prompt_id`, its `progress` events relay straight through as a step counter / percentage on the loading-state page.
+
+**Casting batch is the harder, and the more valuable, case — this is where the SSE payload decision below actually matters:**
+- Following the N-separate-prompts decision (§6), the LMDB record for one casting-batch run is a parent run with **N independent sub-job entries** (one per seed), each carrying its own status (`queued`/`running`/`done`/`error`), its own `{value, max}` progress, and its own resulting file path once pulled.
+- The page renders a grid of N tiles. Each tile independently transitions — spinner → progress bar → thumbnail — as *its own* events land, rather than the whole grid waiting on the slowest candidate.
+- **Decision: the SSE payload carries real per-tile data for casting batch** — which seed/candidate, its status, its progress, and its thumbnail path once done — so the page can patch just that one tile in place. This is a deliberate exception to §9's "plain signal, client reloads" rule: reloading the entire page every time any one of 16 candidates finishes would be wasteful and visibly janky. Single-result phases keep the simple reload behavior; casting batch does not.
+- **Bonus, low additional cost:** ComfyUI only actually executes one prompt at a time by default — the rest of the N sit pending in ComfyUI's own queue. `/queue` (already wrapped by `getQueueStatus()` in `comfyui-client.service.ts`, currently only as running/pending counts) returns the pending list with per-item detail, so extending that read gives each tile a "queued: position 4 of 12" state for free, not just running/done.
+- **Restart-reconciliation scales with N.** §9's "reconcile a stale job against `/history/{promptId}` on restart" now means reconciling N individual `prompt_id`s for one casting-batch run, resuming whichever sub-jobs hadn't finished when the process went down.
 
 ## 10. Deferred / explicitly out of scope for this effort
 
