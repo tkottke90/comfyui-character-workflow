@@ -45,6 +45,13 @@ export interface WorkflowMappingService {
   activateVersion(slotId: string, version: number): WorkflowMappingRecord;
   replaceNodes(slotId: string, version: number, nodes: NodeMapping[]): WorkflowMappingRecord;
   deleteRecord(slotId: string): boolean;
+  /**
+   * Reads back the raw ComfyUI API-format graph importVersion() persisted for a given
+   * version — the template the execution engine clones and splices resolved mapping
+   * values into before submitting. Returns undefined if that slot/version was never
+   * imported (or its raw file is missing for some other reason).
+   */
+  getRawGraph(slotId: string, version: number): unknown | undefined;
   rawGraphDir: string;
 }
 
@@ -198,6 +205,17 @@ export function createWorkflowMappingService(dir: string): WorkflowMappingServic
       }));
 
       return persist({ ...record, versions: updatedVersions });
+    },
+
+    getRawGraph(slotId, version) {
+      const slot = getWorkflowSlot(slotId);
+      if (!slot) return undefined;
+
+      const slug = slugifySlotId(slotId);
+      const graphPath = path.join(rawGraphDir, slug, `v${version}.json`);
+      if (!fs.existsSync(graphPath)) return undefined;
+
+      return JSON.parse(fs.readFileSync(graphPath, 'utf-8'));
     },
 
     deleteRecord(slotId) {
