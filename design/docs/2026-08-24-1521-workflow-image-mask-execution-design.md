@@ -36,7 +36,7 @@ config/
       <slug>.safetensors          # presence = "LoRA exists" (see §7)
       finalizedImages/
         hero.png
-        hero.txt                  # caption — deferred, see §9
+        hero.txt                  # caption — deferred, see §10
         <img-001>.png
         <img-001>.txt
       <phase-binding-key>/        # one directory per phase binding, e.g. casting_preflight/,
@@ -62,6 +62,8 @@ config/
 Most output-producing phases already have a 1-per-key shape in the schema and can reuse the exact same phase-binding-directory + working/finalized convention as inputs, just holding a produced result instead of an uploaded one: `005-FaceCrop` (`FaceCropSchema.path`), `006-Edit`/`010-Angle` (`ViewSchema.imagePath`, one per view key), `008-Polish` (`Polish`, one per view key).
 
 **`001-Seed`'s casting batch is the exception** — it produces N candidates per run (8–16), not one current file. `castingCandidates` gets real file backing, named by seed (`seed-<value>.png`) rather than timestamp, and **all candidates are retained until a winner is picked** (no overwrite-in-place for this one).
+
+**Casting batch submits N separate prompts, not one batched prompt.** Rather than one `/prompt` submission with `EmptyLatentImage.batch_size = N` (which would produce one `SaveImage` node writing N files under a single history entry), the engine submits N independent `POST /prompt` calls — one per seed (`startSeed + i`) — each its own `client_id`/`prompt_id` pair, pulled individually via `/view` as each completes. This is the ComfyUI-preferred approach per our research into character-building workflows; batching the outputs together is explicitly avoided. This means the execution engine (§8) needs a "batch of jobs" mode: the casting-batch job tracked in LMDB is a set of N sub-jobs, not a single `prompt_id`. Still open: whether the SSE/UI reveals candidates incrementally as each of the N finishes, or waits for all N before updating the page — not decided yet.
 
 ## 7. Casting winner → next steps (this session's final decision)
 
