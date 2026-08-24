@@ -1,3 +1,5 @@
+import type { NodeMapping } from '../schemas/workflow-mapping.schema';
+
 export interface ComfyUIClientConfig {
   baseUrl: string;
   apiKey?: string;
@@ -35,6 +37,7 @@ export interface ComfyUIClient {
   getQueueStatus(): Promise<QueueStatus>;
   getObjectInfo(classType?: string): Promise<ObjectInfo>;
   testConnection(): Promise<TestConnectionResult>;
+  freeMemory(): Promise<void>;
 }
 
 /**
@@ -59,6 +62,26 @@ export function getObjectInfoChoices(
   return [];
 }
 
+/**
+ * Re-checks every 'static' mapping against a live /object_info snapshot, flagging
+ * anything that no longer resolves (e.g. a LoRA that's been renamed or removed
+ * from the server) as 'missing' instead of 'verified'. Inputs with no choice-list
+ * (e.g. a plain float like denoise) have nothing to check against, so they're
+ * left 'mapped'/'verified' as-is — there's no way to further verify a scalar. Runs
+ * after every import (fresh or re-import) since new static defaults come straight
+ * from the exported file and haven't been checked against this server yet.
+ */
+export function verifyStaticMappings(nodes: NodeMapping[], objectInfo: ObjectInfo): NodeMapping[] {
+  return nodes.map((node) => {
+    if (node.sourceType !== 'static' || !node.sourceValue) return node;
+
+    const choices = getObjectInfoChoices(objectInfo, node.classType, node.inputName);
+    if (choices.length === 0) return { ...node, status: 'verified' };
+
+    return { ...node, status: choices.includes(node.sourceValue) ? 'verified' : 'missing' };
+  });
+}
+
 export function createComfyUIClient(config: ComfyUIClientConfig): ComfyUIClient {
   function resolveUrl(pathSegment: string): string {
     const trimmed = config.baseUrl.trim().replace(/\/+$/, '');
@@ -66,17 +89,29 @@ export function createComfyUIClient(config: ComfyUIClientConfig): ComfyUIClient 
     return `${withProtocol}${pathSegment}`;
   }
 
-  async function request<T>(pathSegment: string): Promise<T> {
+  async function request<T>(
+    pathSegment: string,
+    options?: { method?: string; body?: unknown },
+  ): Promise<T> {
     const headers: Record<string, string> = {};
     if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
 
-    const response = await fetch(resolveUrl(pathSegment), { headers });
+    let body: string | undefined;
+    if (options?.body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(options.body);
+    }
+
+    const response = await fetch(resolveUrl(pathSegment), { method: options?.method, headers, body });
     if (!response.ok) {
       throw new Error(
         `ComfyUI request to ${pathSegment} failed: ${response.status} ${response.statusText}`,
       );
     }
-    return (await response.json()) as T;
+
+    // Action endpoints like /free can return an empty body on success.
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   async function getSystemStats(): Promise<SystemStats> {
@@ -125,5 +160,9 @@ export function createComfyUIClient(config: ComfyUIClientConfig): ComfyUIClient 
     }
   }
 
-  return { getSystemStats, getQueueStatus, getObjectInfo, testConnection };
+  async function freeMemory(): Promise<void> {
+    await request('/free', { method: 'POST', body: { unload_models: true, free_memory: true } });
+  }
+
+  return { getSystemStats, getQueueStatus, getObjectInfo, testConnection, freeMemory };
 }

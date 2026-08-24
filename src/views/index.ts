@@ -14,6 +14,10 @@ export function createViews(app: Application) {
   nunjucks.configure(templatesDir, {
     autoescape: true,
     express: app,
+    // Without this, nunjucks caches each compiled template forever — editing a .njk file
+    // has no effect on a running process until it's restarted (unlike .ts changes, which
+    // tsx watch picks up automatically since templates aren't part of its module graph).
+    watch: true,
   });
 
   const charactersService = createCharactersService(app.config.getConfigDir('characters'));

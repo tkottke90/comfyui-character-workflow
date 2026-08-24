@@ -56,6 +56,35 @@ export function parseWorkflowGraph(json: unknown): ParsedNodeInput[] {
   return result;
 }
 
+/**
+ * Renders a raw widget value (string/number/boolean — link references are already
+ * filtered out by parseWorkflowGraph) as the plain string a static mapping stores.
+ */
+export function stringifyRawValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
+/**
+ * The default mapping for a node input that has no prior mapping to carry forward —
+ * pre-filled as a static value using whatever was actually captured in the export
+ * (e.g. a KSampler denoise that's always 1.0 for this workflow), rather than left
+ * unmapped. Requiring the user to manually re-enter values ComfyUI already recorded
+ * would make every import tedious for no benefit — they only need to override the
+ * inputs that actually need to vary per character.
+ */
+export function defaultMapping(parsed: ParsedNodeInput): NodeMapping {
+  return {
+    nodeId: parsed.nodeId,
+    nodeTitle: parsed.nodeTitle,
+    inputName: parsed.inputName,
+    classType: parsed.classType,
+    sourceType: 'static',
+    sourceValue: stringifyRawValue(parsed.rawValue),
+    status: 'mapped',
+  };
+}
+
 function normalizeForMatch(value: string): string {
   return value
     .toLowerCase()
@@ -82,7 +111,8 @@ export function suggestSlotId(filename: string): string | undefined {
 /**
  * Carries mappings forward from a previous version onto a freshly re-imported
  * graph — matched by node id first, falling back to node title when the id
- * shifted between exports. Anything that can't be matched comes back unmapped.
+ * shifted between exports. Anything that can't be matched (a genuinely new input)
+ * falls back to the same static-from-export default a fresh import gets.
  */
 export function carryForwardMappings(
   oldNodes: NodeMapping[],
@@ -93,14 +123,16 @@ export function carryForwardMappings(
       oldNodes.find((n) => n.nodeId === parsed.nodeId && n.inputName === parsed.inputName) ??
       oldNodes.find((n) => n.nodeTitle === parsed.nodeTitle && n.inputName === parsed.inputName);
 
+    if (!matched) return defaultMapping(parsed);
+
     return {
       nodeId: parsed.nodeId,
       nodeTitle: parsed.nodeTitle,
       inputName: parsed.inputName,
       classType: parsed.classType,
-      sourceType: matched?.sourceType ?? 'unset',
-      sourceValue: matched?.sourceValue ?? '',
-      status: matched?.status ?? 'unmapped',
+      sourceType: matched.sourceType,
+      sourceValue: matched.sourceValue,
+      status: matched.status,
     };
   });
 }

@@ -98,6 +98,10 @@ export function getWorkflowSlot(slotId: string): WorkflowSlotDef | undefined {
   return WORKFLOW_SLOTS.find((slot) => slot.id === slotId);
 }
 
+export function getWorkflowSlotBySlug(slug: string): WorkflowSlotDef | undefined {
+  return WORKFLOW_SLOTS.find((slot) => slugifySlotId(slot.id) === slug);
+}
+
 export function requiredWorkflowSlots(): WorkflowSlotDef[] {
   return WORKFLOW_SLOTS.filter((slot) => slot.required);
 }

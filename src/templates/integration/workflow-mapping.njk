@@ -1,0 +1,186 @@
+{% extends "layout.njk" %}
+{% set section = "integration" %}
+{% set subsection = "workflow-mapping" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Integration', href: '/integration/connection'}, {label: 'Workflow Mapping'}]) }}
+  {% include "partials/integration-subnav.njk" %}
+
+  <div class="flex items-center gap-3 mb-6 bg-white dark:bg-steel-900 border border-steel-200 dark:border-steel-800 rounded-lg shadow-sm px-4 py-3">
+    <span class="text-[13px] font-bold text-steel-600 dark:text-steel-300 whitespace-nowrap">
+      {{ importedCount }} of {{ requiredSlots.length }} required workflows imported
+    </span>
+    <div class="flex-1 h-2 rounded-full bg-steel-100 dark:bg-steel-800 overflow-hidden">
+      <div class="h-full bg-apple-600" style="width: {{ (importedCount / requiredSlots.length * 100) if requiredSlots.length else 0 }}%"></div>
+    </div>
+    {% if coverage.flagged %}
+      <span class="font-bold text-[10.5px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 whitespace-nowrap">{{ coverage.flagged }} flagged</span>
+    {% endif %}
+    <span class="font-mono text-[11.5px] text-steel-400 whitespace-nowrap">999-DualFaceID optional</span>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[230px_1fr] gap-5 items-start">
+    <div class="flex flex-col gap-4">
+      {% call ui.card('Phase bindings') %}
+        {% for row in phaseBindings %}
+          <div class="py-1.5 border-b border-steel-200 dark:border-steel-800 last:border-0">
+            <div class="font-bold text-[12.5px]">{{ row.label }}</div>
+            {% if row.fulfilled %}
+              <a href="/integration/workflow-mapping/{{ row.slotId | lower }}" class="font-mono text-[12.5px] text-steel-500 dark:text-steel-400 hover:underline hover:text-apple-700 dark:hover:text-apple-300">{{ row.slotId }}</a>
+            {% else %}
+              <div class="font-mono text-[12.5px] text-steel-400">— not configured —</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+        {% for row in unbound %}
+          <div class="py-1.5 opacity-60">
+            <div class="font-bold text-[12.5px]">— not phase-bound —</div>
+            {% if row.hasActiveVersion %}
+              <a href="/integration/workflow-mapping/{{ row.slotId | lower }}" class="font-mono text-[12.5px] hover:underline">{{ row.slotId }}</a>
+            {% else %}
+              <div class="font-mono text-[12.5px] text-steel-400">{{ row.slotId }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endcall %}
+
+      {% call ui.card('Coverage') %}
+        <div class="flex justify-between items-center py-1.5 border-b border-steel-200 dark:border-steel-800 text-[12.5px]">
+          <span>Active, fully mapped</span><b class="font-bold text-success-700 dark:text-[#7fd0a0]">{{ coverage.active }}</b>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-b border-steel-200 dark:border-steel-800 text-[12.5px]">
+          <span>Imported, flagged</span><b class="font-bold text-rose-700 dark:text-rose-300">{{ coverage.flagged }}</b>
+        </div>
+        <div class="flex justify-between items-center py-1.5 text-[12.5px]">
+          <span>Not yet imported</span><b class="font-bold text-steel-400">{{ coverage.notImported }}</b>
+        </div>
+      {% endcall %}
+    </div>
+
+    <div class="min-w-0">
+      {% if not hasAnyImports %}
+        <div class="flex flex-col items-center justify-center text-center bg-white dark:bg-steel-900 border-2 border-dashed border-steel-300 dark:border-steel-700 rounded-xl p-14 min-h-[420px]">
+          <div class="h-14 w-14 rounded-full bg-steel-100 dark:bg-steel-800 flex items-center justify-center text-steel-400 mb-5">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+              <path d="M14 2v6h6" />
+              <path d="M12 18v-6" />
+              <path d="M9 15h6" />
+            </svg>
+          </div>
+          <h1 class="text-lg font-black mb-2">No workflows imported yet</h1>
+          <p class="text-[13.5px] text-steel-500 max-w-md mb-5">
+            Nothing is bound to any phase on a fresh install. Import an exact JSON export of a ComfyUI
+            workflow to configure its field mappings and bind it to a phase — {{ requiredSlots.length }}
+            required workflows, plus one optional diagnostic workflow.
+          </p>
+
+          <form method="post" action="/integration/workflow-mapping/import" data-file-upload data-require-file class="mb-7 w-full max-w-sm">
+            <input type="hidden" name="workflowJsonDataUrl" value="" />
+            <input type="hidden" name="filename" data-file-name value="" />
+            <label class="block text-[11.5px] font-semibold text-steel-500 mb-1 text-left">Workflow slot</label>
+            <select name="slotId" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono mb-3">
+              <option value="">— auto-detect from filename —</option>
+              {% for slot in allSlots %}
+                <option value="{{ slot.id }}">{{ slot.id }} — {{ slot.label }}{{ ' (optional)' if not slot.required }}</option>
+              {% endfor %}
+            </select>
+            <div class="rounded-lg border-2 border-dashed border-steel-300 dark:border-steel-700 px-10 py-6 flex flex-col items-center gap-2 cursor-pointer mb-3"
+                 onclick="this.querySelector('input[type=file]').click()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-steel-400">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <div class="text-[13px] font-semibold" data-file-label>Drag a workflow .json here, or click to browse</div>
+              <input type="file" accept="application/json" class="hidden" />
+            </div>
+            {{ ui.button('Import workflow (.json)') }}
+          </form>
+
+          <div class="pt-5 border-t border-steel-200 dark:border-steel-800 w-full max-w-md">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-steel-400 mb-2.5">Required for Character List to unlock</div>
+            <div class="flex flex-wrap gap-1.5 justify-center">
+              {% for slot in allSlots %}
+                <span class="font-mono text-[11px] font-semibold {{ 'text-steel-500 dark:text-steel-400' if slot.required else 'text-steel-400 dark:text-steel-600 italic' }} bg-steel-100 dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded px-2 py-0.5">
+                  {{ slot.id }}{{ ' (optional)' if not slot.required }}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="flex items-start gap-3 mb-4">
+          <div>
+            <h1 class="text-lg font-black tracking-tight">Imported workflows</h1>
+            <p class="text-[12.5px] text-steel-400">Every workflow file imported so far, across all phases. Click the pencil to open a workflow's field mapping, or the trash to remove it.</p>
+          </div>
+        </div>
+
+        {% call ui.card('Import a workflow') %}
+          <form method="post" action="/integration/workflow-mapping/import" data-file-upload data-require-file class="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="workflowJsonDataUrl" value="" />
+            <input type="hidden" name="filename" data-file-name value="" />
+            <div>
+              <label class="block text-[11px] font-semibold text-steel-500 mb-1">Workflow slot</label>
+              <select name="slotId" class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono">
+                <option value="">— auto-detect from filename —</option>
+                {% for slot in allSlots %}
+                  <option value="{{ slot.id }}">{{ slot.id }} — {{ slot.label }}{{ ' (optional)' if not slot.required }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11.5px] text-steel-400" data-file-label>no file chosen</span>
+              <button type="button" onclick="this.closest('form').querySelector('input[type=file]').click()"
+                class="rounded-md border border-steel-300 dark:border-steel-700 px-3 py-1.5 text-[12px] font-bold text-steel-600 dark:text-steel-200 hover:bg-steel-50 dark:hover:bg-steel-800">
+                Choose file
+              </button>
+              <input type="file" accept="application/json" class="hidden" />
+            </div>
+            {{ ui.button('Import workflow (.json)') }}
+          </form>
+        {% endcall %}
+
+        <div class="bg-white dark:bg-steel-900 border border-steel-200 dark:border-steel-800 rounded-lg shadow-sm overflow-hidden mt-4">
+          <div class="grid grid-cols-[1fr_64px_88px] lg:grid-cols-[100px_1fr_160px_64px_120px_88px] gap-2.5 px-3.5 py-2 bg-steel-100 dark:bg-steel-800 text-[11px] font-bold uppercase tracking-wider text-steel-500 dark:text-steel-400">
+            <div>Workflow</div><div class="hidden lg:block">Phase</div><div class="hidden lg:block">File</div><div>Version</div><div class="hidden lg:block">Status</div><div>Actions</div>
+          </div>
+
+          {% for row in rows %}
+            <div class="grid grid-cols-[1fr_64px_88px] lg:grid-cols-[100px_1fr_160px_64px_120px_88px] gap-2.5 items-center px-3.5 py-2 border-b border-steel-200 dark:border-steel-800 last:border-0 text-[12.5px] {{ 'bg-rose-50 dark:bg-rose-950/30' if row.status.tone == 'warning' }}">
+              <div class="font-mono font-bold truncate">{{ row.slotId }}</div>
+              <div class="hidden lg:block text-steel-500 dark:text-steel-400 truncate">{{ row.phaseLabel }}</div>
+              <div class="hidden lg:block font-mono text-steel-400 truncate">{{ row.filename }}</div>
+              <div class="font-mono">v{{ row.version }}</div>
+              <div class="hidden lg:block">
+                {% if row.status.tone == 'active' %}
+                  <span class="font-bold text-success-700 dark:text-[#7fd0a0]">✓ {{ row.status.label }}</span>
+                {% elif row.status.tone == 'warning' %}
+                  <span class="font-bold text-rose-700 dark:text-rose-300">⚠ {{ row.status.label }}</span>
+                {% else %}
+                  <span class="text-steel-400">{{ row.status.label }}</span>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-1.5">
+                <a href="/integration/workflow-mapping/{{ row.slug }}" title="Edit mapping"
+                   class="w-[29px] h-[29px] inline-flex items-center justify-center rounded-md border border-steel-300 dark:border-steel-700 text-steel-500 dark:text-steel-300 hover:bg-steel-50 dark:hover:bg-steel-800">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                </a>
+                <form method="post" action="/integration/workflow-mapping/{{ row.slug }}/delete"
+                      onsubmit="return confirm('Remove the {{ row.slotId }} workflow? This deletes all its versions and un-binds it from its phase.');">
+                  <button type="submit" title="Delete workflow"
+                    class="w-[29px] h-[29px] inline-flex items-center justify-center rounded-md border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  </button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <p class="mt-3.5 text-[11.5px] text-steel-400">Deleting a workflow un-binds it from its phase immediately — that phase reverts to "not configured" until a replacement is imported.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

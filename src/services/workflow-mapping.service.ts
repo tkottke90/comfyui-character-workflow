@@ -9,7 +9,7 @@ import {
   WorkflowVersion,
 } from '../schemas/workflow-mapping.schema';
 import { getWorkflowSlot, slugifySlotId } from '../comfy/workflow-registry';
-import { carryForwardMappings, parseWorkflowGraph, suggestSlotId } from '../lib/comfyui-workflow';
+import { carryForwardMappings, defaultMapping, parseWorkflowGraph } from '../lib/comfyui-workflow';
 
 export class WorkflowSlotNotFoundError extends Error {
   constructor(slotId: string) {
@@ -31,7 +31,7 @@ export interface WorkflowMappingService {
   importVersion(
     rawGraphJson: unknown,
     filename: string,
-    requestedSlotId?: string,
+    slotId: string,
   ): { record: WorkflowMappingRecord; version: number };
   updateNodeMapping(
     slotId: string,
@@ -43,6 +43,8 @@ export interface WorkflowMappingService {
   setResultOutput(slotId: string, version: number, output: ResultOutput): WorkflowMappingRecord;
   bindPhase(slotId: string, version: number, boundPhaseSlotId: string): WorkflowMappingRecord;
   activateVersion(slotId: string, version: number): WorkflowMappingRecord;
+  replaceNodes(slotId: string, version: number, nodes: NodeMapping[]): WorkflowMappingRecord;
+  deleteRecord(slotId: string): boolean;
   rawGraphDir: string;
 }
 
@@ -109,23 +111,14 @@ export function createWorkflowMappingService(dir: string): WorkflowMappingServic
       return readSlug(slugifySlotId(slotId));
     },
 
-    importVersion(rawGraphJson, filename, requestedSlotId) {
-      const slotId = requestedSlotId ?? suggestSlotId(filename) ?? '999-DualFaceID';
+    importVersion(rawGraphJson, filename, slotId) {
       const record = requireSlotRecord(slotId);
       const parsedNodes = parseWorkflowGraph(rawGraphJson);
 
       const previousVersion = record.versions.at(-1);
       const nodes = previousVersion
         ? carryForwardMappings(previousVersion.nodes, parsedNodes)
-        : parsedNodes.map((n) => ({
-            nodeId: n.nodeId,
-            nodeTitle: n.nodeTitle,
-            inputName: n.inputName,
-            classType: n.classType,
-            sourceType: 'unset' as const,
-            sourceValue: '',
-            status: 'unmapped' as const,
-          }));
+        : parsedNodes.map(defaultMapping);
 
       const version = (previousVersion?.version ?? 0) + 1;
       const graphDir = path.join(rawGraphDir, record.slug);
@@ -164,6 +157,15 @@ export function createWorkflowMappingService(dir: string): WorkflowMappingServic
       return persist({ ...record, versions: updatedVersions });
     },
 
+    replaceNodes(slotId, version, nodes) {
+      const record = requireSlotRecord(slotId);
+      requireVersion(record, version);
+
+      const updatedVersions = record.versions.map((v) => (v.version === version ? { ...v, nodes } : v));
+
+      return persist({ ...record, versions: updatedVersions });
+    },
+
     setResultOutput(slotId, version, output) {
       const record = requireSlotRecord(slotId);
       requireVersion(record, version);
@@ -196,6 +198,22 @@ export function createWorkflowMappingService(dir: string): WorkflowMappingServic
       }));
 
       return persist({ ...record, versions: updatedVersions });
+    },
+
+    deleteRecord(slotId) {
+      const slot = getWorkflowSlot(slotId);
+      if (!slot) throw new WorkflowSlotNotFoundError(slotId);
+
+      const slug = slugifySlotId(slotId);
+      const file = filePath(slug);
+      if (!fs.existsSync(file)) return false;
+
+      fs.unlinkSync(file);
+
+      const graphDir = path.join(rawGraphDir, slug);
+      if (fs.existsSync(graphDir)) fs.rmSync(graphDir, { recursive: true, force: true });
+
+      return true;
     },
   };
 }

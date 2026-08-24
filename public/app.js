@@ -2,6 +2,32 @@
 (function () {
   'use strict';
 
+  // ---- Sidebar drawer (below lg): hamburger button opens, X inside the sidebar or the
+  // backdrop closes it ----
+  var sidebar = document.getElementById('sidebar');
+  var sidebarToggle = document.getElementById('sidebar-toggle');
+  var sidebarClose = document.getElementById('sidebar-close');
+  var sidebarBackdrop = document.getElementById('sidebar-backdrop');
+  if (sidebar && sidebarToggle && sidebarClose && sidebarBackdrop) {
+    var mainEl = document.querySelector('main');
+    var setSidebarOpen = function (open) {
+      sidebar.classList.toggle('-translate-x-full', !open);
+      sidebarBackdrop.classList.toggle('hidden', !open);
+      sidebarToggle.classList.toggle('hidden', open);
+      sidebarToggle.setAttribute('aria-expanded', String(open));
+      if (mainEl) mainEl.style.overflow = open ? 'hidden' : '';
+    };
+    sidebarToggle.addEventListener('click', function () {
+      setSidebarOpen(true);
+    });
+    sidebarClose.addEventListener('click', function () {
+      setSidebarOpen(false);
+    });
+    sidebarBackdrop.addEventListener('click', function () {
+      setSidebarOpen(false);
+    });
+  }
+
   // ---- Live range readouts (denoise sliders etc.) ----
   document.querySelectorAll('[data-range-output]').forEach(function (input) {
     var output = document.querySelector(input.getAttribute('data-range-output'));
@@ -77,7 +103,12 @@
     var preview = wrapper.querySelector('[data-file-preview]');
     var label = wrapper.querySelector('[data-file-label]');
     var filenameField = wrapper.querySelector('[data-file-name]');
+    var submitBtn = wrapper.hasAttribute('data-require-file')
+      ? wrapper.querySelector('button[type="submit"]')
+      : null;
     if (!input || !hidden) return;
+
+    if (submitBtn) submitBtn.disabled = true;
 
     var handleFile = function (file) {
       if (!file) return;
@@ -90,6 +121,7 @@
         }
         if (label) label.textContent = file.name;
         if (filenameField) filenameField.value = file.name;
+        if (submitBtn) submitBtn.disabled = false;
       };
       reader.readAsDataURL(file);
     };

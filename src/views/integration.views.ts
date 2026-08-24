@@ -5,6 +5,7 @@ import {
   createComfyUIClient,
   getObjectInfoChoices,
   ObjectInfo,
+  verifyStaticMappings,
 } from '../services/comfyui-client.service';
 import {
   WorkflowMappingService,
@@ -12,8 +13,10 @@ import {
 } from '../services/workflow-mapping.service';
 import { BadRequestError, NotFoundError } from '../errors/http.errors';
 import { parseJsonDataUrl } from '../lib/data-url';
+import { suggestSlotId } from '../lib/comfyui-workflow';
 import {
   getWorkflowSlot,
+  getWorkflowSlotBySlug,
   requiredWorkflowSlots,
   slugifySlotId,
   WORKFLOW_SLOTS,
@@ -21,10 +24,14 @@ import {
 import { DOMAIN_FIELDS } from '../comfy/domain-fields';
 import {
   activeVersion,
+  candidateOutputNodes,
   canActivateVersion,
   latestVersion,
   phaseBindingRows,
+  requiredSlotCoverage,
   requiredSlotProgress,
+  summarizeVersionStatus,
+  unboundSlots,
 } from '../lib/workflow-mapping-logic';
 import { NodeMapping, WorkflowMappingRecord } from '../schemas/workflow-mapping.schema';
 
@@ -110,6 +117,8 @@ export function createIntegrationRouter(
     const progress = requiredSlotProgress(workflowMapping.list());
     const testResult = typeof req.query.testResult === 'string' ? req.query.testResult : undefined;
     const testError = typeof req.query.testError === 'string' ? req.query.testError : undefined;
+    const freeResult = typeof req.query.freeResult === 'string' ? req.query.freeResult : undefined;
+    const freeError = typeof req.query.freeError === 'string' ? req.query.freeError : undefined;
 
     res.render('integration/connection.njk', {
       section: 'integration',
@@ -121,6 +130,8 @@ export function createIntegrationRouter(
       progress,
       testResult,
       testError,
+      freeResult,
+      freeError,
     });
   });
 
@@ -146,34 +157,66 @@ export function createIntegrationRouter(
     res.redirect(`/integration/connection?${params.toString()}`);
   });
 
+  router.post('/connection/free-memory', async (_req: Request, res: Response) => {
+    const params = new URLSearchParams();
+    try {
+      await getClient().freeMemory();
+      params.set('freeResult', 'ok');
+    } catch (err) {
+      params.set('freeResult', 'error');
+      params.set('freeError', err instanceof Error ? err.message : 'Unknown error');
+    }
+    res.redirect(`/integration/connection?${params.toString()}`);
+  });
+
   router.get('/workflow-mapping', (_req: Request, res: Response) => {
     const records = workflowMapping.list();
-    const progress = requiredSlotProgress(records);
 
-    const withVersions = records.find((record) => record.versions.length > 0);
-    if (withVersions) {
-      return res.redirect(`/integration/workflow-mapping/${withVersions.slotId}`);
-    }
+    const rows = records
+      .filter((record) => record.versions.length > 0)
+      .map((record) => {
+        const slot = getWorkflowSlot(record.slotId);
+        const version = activeVersion(record) ?? latestVersion(record);
+        if (!slot || !version) return undefined;
 
-    res.render('integration/workflow-mapping-empty.njk', {
+        return {
+          slug: record.slug,
+          slotId: record.slotId,
+          label: slot.label,
+          phaseLabel: slot.phaseBindings.map((b) => b.label).join(', ') || '—',
+          filename: version.filename,
+          version: version.version,
+          status: summarizeVersionStatus(version),
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== undefined);
+
+    const coverage = requiredSlotCoverage(records);
+
+    res.render('integration/workflow-mapping.njk', {
       section: 'integration',
       subsection: 'workflow-mapping',
-      progress,
+      rows,
+      phaseBindings: phaseBindingRows(records),
+      unbound: unboundSlots(records),
+      coverage,
+      importedCount: coverage.active + coverage.flagged,
       requiredSlots: requiredWorkflowSlots(),
       allSlots: WORKFLOW_SLOTS,
-      phaseBindings: phaseBindingRows(records),
+      hasAnyImports: rows.length > 0,
     });
   });
 
-  router.get('/workflow-mapping/:slotId', async (req: Request, res: Response) => {
-    const slotId = param(req, 'slotId');
-    const slot = getWorkflowSlot(slotId);
-    if (!slot) throw new NotFoundError(`Unknown workflow slot "${slotId}"`);
+  async function renderMappingDetail(req: Request, res: Response) {
+    const slugParam = param(req, 'slug');
+    const slot = getWorkflowSlotBySlug(slugParam);
+    if (!slot) throw new NotFoundError(`Unknown workflow "${slugParam}"`);
 
+    const slug = slugifySlotId(slot.id);
     const allRecords = workflowMapping.list();
-    const record = workflowMapping.get(slotId) ?? emptyRecord(slotId);
+    const record = workflowMapping.get(slot.id) ?? emptyRecord(slot.id);
 
-    const requestedVersion = req.query.version ? Number(req.query.version) : undefined;
+    const requestedVersion = req.params.version ? Number(param(req, 'version')) : undefined;
     const version = requestedVersion
       ? record.versions.find((v) => v.version === requestedVersion)
       : (activeVersion(record) ?? latestVersion(record));
@@ -199,14 +242,17 @@ export function createIntegrationRouter(
     }
 
     const uniqueNodeIds = version ? Array.from(new Set(version.nodes.map((n) => n.nodeId))) : [];
+    const outputNodeCandidates = version ? candidateOutputNodes(version) : [];
 
     res.render('integration/workflow-mapping-detail.njk', {
       section: 'integration',
       subsection: 'workflow-mapping',
       slot,
+      slug,
       record,
       version,
       uniqueNodeIds,
+      outputNodeCandidates,
       editingKey,
       editingNode,
       editingOptions,
@@ -217,14 +263,24 @@ export function createIntegrationRouter(
       progress: requiredSlotProgress(allRecords),
       canActivate: version ? canActivateVersion(version, slot) : false,
     });
-  });
+  }
 
-  router.post('/workflow-mapping/import', (req: Request, res: Response) => {
+  router.get('/workflow-mapping/:slug', renderMappingDetail);
+  router.get('/workflow-mapping/:slug/v:version', renderMappingDetail);
+
+  router.post('/workflow-mapping/import', async (req: Request, res: Response) => {
     const dataUrl = String(req.body.workflowJsonDataUrl ?? '');
     if (!dataUrl) throw new BadRequestError('A workflow JSON file is required');
 
     const filename = String(req.body.filename ?? 'workflow.json');
     const requestedSlotId = req.body.slotId ? String(req.body.slotId) : undefined;
+    const targetSlotId = requestedSlotId || suggestSlotId(filename);
+
+    if (!targetSlotId) {
+      throw new BadRequestError(
+        `Could not detect which workflow "${filename}" is — pick one from the "Workflow slot" dropdown`,
+      );
+    }
 
     let rawGraphJson: unknown;
     try {
@@ -237,9 +293,25 @@ export function createIntegrationRouter(
       const { record, version } = workflowMapping.importVersion(
         rawGraphJson,
         filename,
-        requestedSlotId,
+        targetSlotId,
       );
-      res.redirect(`/integration/workflow-mapping/${record.slotId}?version=${version}`);
+
+      // Every input just defaulted to a static value straight from the export — verify
+      // those against a live /object_info snapshot now so anything ComfyUI doesn't
+      // actually have installed (e.g. a renamed LoRA) is flagged immediately.
+      try {
+        const objectInfo = await getClient().getObjectInfo();
+        const target = record.versions.find((v) => v.version === version);
+        if (target) {
+          const verifiedNodes = verifyStaticMappings(target.nodes, objectInfo);
+          workflowMapping.replaceNodes(record.slotId, version, verifiedNodes);
+        }
+      } catch {
+        // ComfyUI unreachable — leave everything as 'mapped'; re-verifies next time a
+        // row is saved or the workflow is re-imported.
+      }
+
+      res.redirect(`/integration/workflow-mapping/${record.slug}/v${version}`);
     } catch (err) {
       if (err instanceof WorkflowSlotNotFoundError) throw new NotFoundError(err.message);
       throw new BadRequestError(err instanceof Error ? err.message : 'Could not import workflow');
@@ -247,31 +319,37 @@ export function createIntegrationRouter(
   });
 
   router.post(
-    '/workflow-mapping/:slotId/versions/:version/bind-phase',
+    '/workflow-mapping/:slug/versions/:version/bind-phase',
     (req: Request, res: Response) => {
-      const slotId = param(req, 'slotId');
+      const slug = param(req, 'slug');
+      const slot = getWorkflowSlotBySlug(slug);
+      if (!slot) throw new NotFoundError(`Unknown workflow "${slug}"`);
+
       const version = Number(param(req, 'version'));
       const targetSlotId = String(req.body.slotId ?? '').trim();
 
       if (!targetSlotId) throw new BadRequestError('A phase must be selected');
-      if (targetSlotId !== slotId) {
+      if (targetSlotId !== slot.id) {
         // Reassigning an import to a different slot after the fact would require moving it
         // between records — instead, re-import the same file under the correct slot via
         // "Import new version" on that slot's page.
         throw new BadRequestError(
-          `This import belongs to "${slotId}" — to bind it to a different phase, re-import it from that slot's page`,
+          `This import belongs to "${slot.id}" — to bind it to a different phase, re-import it from that slot's page`,
         );
       }
 
-      workflowMapping.bindPhase(slotId, version, targetSlotId);
-      res.redirect(`/integration/workflow-mapping/${slotId}?version=${version}`);
+      workflowMapping.bindPhase(slot.id, version, targetSlotId);
+      res.redirect(`/integration/workflow-mapping/${slug}/v${version}`);
     },
   );
 
   router.post(
-    '/workflow-mapping/:slotId/versions/:version/nodes/:nodeId/:inputName',
+    '/workflow-mapping/:slug/versions/:version/nodes/:nodeId/:inputName',
     async (req: Request, res: Response) => {
-      const slotId = param(req, 'slotId');
+      const slug = param(req, 'slug');
+      const slot = getWorkflowSlotBySlug(slug);
+      if (!slot) throw new NotFoundError(`Unknown workflow "${slug}"`);
+
       const version = Number(param(req, 'version'));
       const nodeId = param(req, 'nodeId');
       const inputName = param(req, 'inputName');
@@ -291,7 +369,7 @@ export function createIntegrationRouter(
         status = 'mapped';
 
         if (sourceType === 'static') {
-          const record = workflowMapping.get(slotId);
+          const record = workflowMapping.get(slot.id);
           const versionRecord = record?.versions.find((v) => v.version === version);
           const node = versionRecord?.nodes.find(
             (n) => n.nodeId === nodeId && n.inputName === inputName,
@@ -309,20 +387,23 @@ export function createIntegrationRouter(
         }
       }
 
-      workflowMapping.updateNodeMapping(slotId, version, nodeId, inputName, {
+      workflowMapping.updateNodeMapping(slot.id, version, nodeId, inputName, {
         sourceType: sourceType as NodeMapping['sourceType'],
         sourceValue,
         status,
       });
 
-      res.redirect(`/integration/workflow-mapping/${slotId}?version=${version}`);
+      res.redirect(`/integration/workflow-mapping/${slug}/v${version}`);
     },
   );
 
   router.post(
-    '/workflow-mapping/:slotId/versions/:version/result-output',
+    '/workflow-mapping/:slug/versions/:version/result-output',
     (req: Request, res: Response) => {
-      const slotId = param(req, 'slotId');
+      const slug = param(req, 'slug');
+      const slot = getWorkflowSlotBySlug(slug);
+      if (!slot) throw new NotFoundError(`Unknown workflow "${slug}"`);
+
       const version = Number(param(req, 'version'));
       const nodeId = String(req.body.nodeId ?? '').trim();
       const outputIndex = Number(req.body.outputIndex ?? 0);
@@ -330,21 +411,21 @@ export function createIntegrationRouter(
 
       if (!nodeId) throw new BadRequestError('A result node is required');
 
-      workflowMapping.setResultOutput(slotId, version, { nodeId, outputIndex, label });
-      res.redirect(`/integration/workflow-mapping/${slotId}?version=${version}`);
+      workflowMapping.setResultOutput(slot.id, version, { nodeId, outputIndex, label });
+      res.redirect(`/integration/workflow-mapping/${slug}/v${version}`);
     },
   );
 
   router.post(
-    '/workflow-mapping/:slotId/versions/:version/activate',
+    '/workflow-mapping/:slug/versions/:version/activate',
     (req: Request, res: Response) => {
-      const slotId = param(req, 'slotId');
+      const slug = param(req, 'slug');
+      const slot = getWorkflowSlotBySlug(slug);
+      if (!slot) throw new NotFoundError(`Unknown workflow "${slug}"`);
+
       const version = Number(param(req, 'version'));
 
-      const slot = getWorkflowSlot(slotId);
-      if (!slot) throw new NotFoundError(`Unknown workflow slot "${slotId}"`);
-
-      const record = workflowMapping.get(slotId);
+      const record = workflowMapping.get(slot.id);
       const target = record?.versions.find((v) => v.version === version);
       if (!target) throw new NotFoundError('Version not found');
 
@@ -354,10 +435,19 @@ export function createIntegrationRouter(
         );
       }
 
-      workflowMapping.activateVersion(slotId, version);
-      res.redirect(`/integration/workflow-mapping/${slotId}?version=${version}`);
+      workflowMapping.activateVersion(slot.id, version);
+      res.redirect(`/integration/workflow-mapping/${slug}/v${version}`);
     },
   );
+
+  router.post('/workflow-mapping/:slug/delete', (req: Request, res: Response) => {
+    const slug = param(req, 'slug');
+    const slot = getWorkflowSlotBySlug(slug);
+    if (!slot) throw new NotFoundError(`Unknown workflow "${slug}"`);
+
+    workflowMapping.deleteRecord(slot.id);
+    res.redirect('/integration/workflow-mapping');
+  });
 
   router.get('/models-loras', async (_req: Request, res: Response) => {
     let objectInfo: ObjectInfo = {};
