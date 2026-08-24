@@ -163,6 +163,35 @@ describe('comfyui-client.service (against a local stub server)', () => {
     }
   });
 
+  it('getQueueStatus returns running/pending counts plus pending prompt ids in queue order', async () => {
+    const stub = await startStubServer({
+      'GET /queue': (_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            queue_running: [[0, 'prompt-running', {}, {}, []]],
+            queue_pending: [
+              [1, 'prompt-next', {}, {}, []],
+              [2, 'prompt-after', {}, {}, []],
+            ],
+          }),
+        );
+      },
+    });
+
+    try {
+      const client = createComfyUIClient({ baseUrl: stub.baseUrl });
+      const status = await client.getQueueStatus();
+      expect(status).to.deep.equal({
+        running: 1,
+        pending: 2,
+        pendingPromptIds: ['prompt-next', 'prompt-after'],
+      });
+    } finally {
+      await stub.close();
+    }
+  });
+
   it('viewImage returns the raw response bytes', async () => {
     const stub = await startStubServer({
       'GET /view': (_req, res) => {

@@ -16,6 +16,10 @@ export interface SystemStats {
 export interface QueueStatus {
   running: number;
   pending: number;
+  /** Pending prompt ids in queue order (index 0 = next up) — lets a caller compute a
+   *  specific prompt_id's "position N of M" (indexOf(promptId) + 1, of .length) without
+   *  this client having to know which job/character/phase-binding that prompt belongs to. */
+  pendingPromptIds: string[];
 }
 
 export interface ObjectInfoEntry {
@@ -208,9 +212,16 @@ export function createComfyUIClient(config: ComfyUIClientConfig): ComfyUIClient 
 
   async function getQueueStatus(): Promise<QueueStatus> {
     const raw = await request<{ queue_running?: unknown[]; queue_pending?: unknown[] }>('/queue');
+    // Each queue entry is ComfyUI's own [queue_number, prompt_id, prompt, extra_data,
+    // outputs_to_execute] tuple — only the prompt_id (index 1) is needed here.
+    const pendingPromptIds = (raw.queue_pending ?? [])
+      .map((entry) => (Array.isArray(entry) ? entry[1] : undefined))
+      .filter((id): id is string => typeof id === 'string');
+
     return {
       running: raw.queue_running?.length ?? 0,
       pending: raw.queue_pending?.length ?? 0,
+      pendingPromptIds,
     };
   }
 
