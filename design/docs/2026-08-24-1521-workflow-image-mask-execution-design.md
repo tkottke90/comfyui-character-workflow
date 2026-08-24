@@ -79,6 +79,15 @@ Building the engine turned out to be required, not deferrable, because pulling g
 - **Submit pipeline:** clone the version's stored raw graph (`workflow-mapping.service.ts` already persists `v${version}.json`) → upload `Current Image`/`Current Mask` via `/upload/image` (`overwrite: true`) → splice returned filenames into the graph → generate a `client_id` → `POST /prompt` → track the returned `prompt_id`.
 - **Completion + pull:** listen on ComfyUI's `/ws` (scoped by `client_id`) for the `executed` event on that `prompt_id` → use the version's `resultOutput` (`{nodeId, outputIndex, label}`) to find the produced filename in the history entry → pull bytes via `/view` → save into the phase-binding's output directory (§4/§6).
 
+## 8a. Failure handling
+
+Failure is a first-class outcome, not an afterthought — the engine needs a defined behavior for every way a run can fail, not just the happy path in §8.
+
+- **Connection failures** (ComfyUI unreachable at submit time, or the `/ws` connection drops mid-run): surfaced distinctly from an execution failure. The failure state offers a **"Check Connection" button that takes the user to `/integration/connection`** (the existing Integration → Connection page, which already has a "Test Connection" action against `comfyui-client.service.ts`), rather than a generic error message.
+- **Execution failures** (ComfyUI accepted the prompt but a node errored mid-run): ComfyUI's `/history/{prompt_id}` entry carries error detail (failing node, exception type/message) when a prompt errors — surface that detail to the user whenever it's available, rather than a bare "it failed." Exact presentation TBD at implementation time, but the raw information should not be discarded.
+- **Retry.** Any failed run (connection or execution) can be retried by the user — resubmits the same phase the same way a first attempt would (re-uploads the current image/mask under the same stable filename, submits a new prompt). Retrying does not require re-entering anything.
+- **"Open in ComfyUI"** (deep-linking the user into ComfyUI's own UI at the failed prompt/node for hands-on debugging) would be a nice-to-have if straightforward, but is **not a committed requirement** — don't block on it.
+
 ## 9. Async UI model
 
 - **SSE, not blocking-wait.** Triggering a phase returns immediately with the page rendered in a loading state; a `text/event-stream` connection (per-page-scoped, e.g. `/characters/:slug/<phase>/events`) delivers the completion event.
