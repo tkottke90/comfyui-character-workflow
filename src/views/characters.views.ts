@@ -354,33 +354,54 @@ export function createCharactersRouter(
 
   router.get('/:slug/casting/batch', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
-    res.render('characters/casting_batch.njk', baseContext(character));
-  });
-
-  router.post('/:slug/casting/batch/candidates', (req: Request, res: Response) => {
-    const character = getCharacterOr404(characters, param(req, 'slug'));
-    const startSeed = Number(req.body.startSeed);
-    const count = Math.min(Math.max(Number(req.body.count) || 1, 1), 16);
-    if (!Number.isFinite(startSeed))
-      throw new BadRequestError('A numeric starting seed is required');
-
-    const createdAt = new Date().toISOString();
-    const newCandidates = Array.from({ length: count }, (_, i) => ({
-      seed: startSeed + i,
-      note: '',
-      createdAt,
-      imagePath: '',
-    }));
-
-    characters.update(character.slug, {
-      castingCandidates: [...character.castingCandidates, ...newCandidates],
-      checklist: {
-        ...character.checklist,
-        'casting.variance_strategy': true,
-      },
+    res.render('characters/casting_batch.njk', {
+      ...baseContext(character),
+      jobActive: isJobActive(jobStore.get(character.slug, 'casting_batch')),
     });
-    res.redirect(`/characters/${character.slug}/casting/batch`);
   });
+
+  router.post(
+    '/:slug/casting/batch/candidates',
+    async (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const startSeed = Number(req.body.startSeed);
+      const count = Math.min(Math.max(Number(req.body.count) || 1, 1), 16);
+      if (!Number.isFinite(startSeed))
+        throw new BadRequestError('A numeric starting seed is required');
+
+      // Same best-effort duplicate-submit guard as the single-run route — a batch already
+      // in flight shouldn't be resubmitted from a second click landing before the redirect.
+      if (isJobActive(jobStore.get(character.slug, 'casting_batch'))) {
+        res.redirect(`/characters/${character.slug}/casting/batch`);
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const newCandidates = Array.from({ length: count }, (_, i) => ({
+        seed: startSeed + i,
+        note: '',
+        createdAt,
+        imagePath: '',
+      }));
+
+      characters.update(character.slug, {
+        castingCandidates: [...character.castingCandidates, ...newCandidates],
+        checklist: {
+          ...character.checklist,
+          'casting.variance_strategy': true,
+        },
+      });
+
+      try {
+        await executionService.submitCastingBatch(character.slug, startSeed, count);
+      } catch (err) {
+        next(err);
+        return;
+      }
+
+      res.redirect(`/characters/${character.slug}/casting/batch`);
+    },
+  );
 
   router.post('/:slug/casting/candidates/:seed/select', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));

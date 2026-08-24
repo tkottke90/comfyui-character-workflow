@@ -13,14 +13,64 @@
   // Single-result phases (job.kind === 'single'): on 'done' or 'error', the page just
   // reloads — this app has no client-side framework and every other page already works
   // by plain form-post/redirect, so reload is what shows the promoted result or the
-  // failure state, consistent with that. Casting batch (job.kind === 'batch') is a
-  // deliberate exception in the design (a tile grid patched in place, not a reload) —
-  // not implemented here yet; this client only drives the single-result case for now.
+  // failure state, consistent with that.
+  //
+  // Casting batch (job.kind === 'batch') is the deliberate exception in the design: a
+  // tile grid patched in place rather than reloaded, since a reload mid-batch would lose
+  // the in-progress state of every candidate that hadn't finished yet. Opt in per-page by
+  // also setting data-sse-batch on the same element, plus a data-images-base prefix (e.g.
+  // "/characters/<slug>/images/file") images are served under. Each candidate tile is:
+  //   <div data-casting-tile data-seed="<seed>">
+  //     <img data-tile-image> or <div data-tile-placeholder> (whichever the page rendered)
+  //     <div data-tile-status></div>
+  //   </div>
+
+  function patchBatchTiles(root, job) {
+    var imagesBase = root.getAttribute('data-images-base') || '';
+    var subJobs = job.subJobs || [];
+    var done = 0;
+    var failed = 0;
+
+    subJobs.forEach(function (sub) {
+      if (sub.status === 'done') done += 1;
+      if (sub.status === 'error') failed += 1;
+
+      var tile = root.querySelector('[data-casting-tile][data-seed="' + sub.seed + '"]');
+      if (!tile) return;
+
+      var statusEl = tile.querySelector('[data-tile-status]');
+      if (statusEl) {
+        if (sub.status === 'done') statusEl.textContent = '';
+        else if (sub.status === 'error') statusEl.textContent = 'Failed' + (sub.error && sub.error.message ? ': ' + sub.error.message : '');
+        else if (sub.status === 'running') statusEl.textContent = 'Running' + (sub.progress ? ' ' + sub.progress.value + '/' + sub.progress.max : '…');
+        else statusEl.textContent = 'Queued…';
+      }
+
+      if (sub.status === 'done' && sub.resultPath) {
+        var src = imagesBase + '/' + sub.resultPath;
+        var img = tile.querySelector('[data-tile-image]');
+        var placeholder = tile.querySelector('[data-tile-placeholder]');
+        if (img) {
+          if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+        } else if (placeholder) {
+          var newImg = document.createElement('img');
+          newImg.setAttribute('data-tile-image', '');
+          newImg.setAttribute('src', src);
+          newImg.setAttribute('alt', '');
+          newImg.className = placeholder.className;
+          placeholder.replaceWith(newImg);
+        }
+      }
+    });
+
+    return { total: subJobs.length, done: done, failed: failed };
+  }
 
   document.querySelectorAll('[data-sse-events]').forEach(function (root) {
     var url = root.getAttribute('data-sse-events');
     if (!url) return;
 
+    var isBatch = root.hasAttribute('data-sse-batch');
     var statusEl = root.querySelector('[data-sse-status]');
     var progressEl = root.querySelector('[data-sse-progress]');
 
@@ -44,9 +94,18 @@
       }
 
       if (job.kind === 'batch') {
-        // Tile-grid patching for casting batch isn't implemented on this generic
-        // client yet — surfaced as a status line rather than silently doing nothing.
-        setStatus('Casting batch in progress — refresh to see results.');
+        if (!isBatch) {
+          setStatus('Casting batch in progress — refresh to see results.');
+          return;
+        }
+        var summary = patchBatchTiles(root, job);
+        if (summary.total === 0) setStatus('');
+        else if (summary.done + summary.failed >= summary.total) {
+          source.close();
+          setStatus(summary.failed > 0 ? summary.done + '/' + summary.total + ' done, ' + summary.failed + ' failed' : 'All ' + summary.total + ' candidates done');
+        } else {
+          setStatus((summary.done + summary.failed) + ' of ' + summary.total + ' finished…');
+        }
         return;
       }
 

@@ -374,7 +374,17 @@ describe('execution.service', () => {
   it('casting batch submits N independent prompts with the seed overridden per candidate, tracked as sub-jobs', async () => {
     const charactersDir = path.join(dir, 'characters');
     const characters = createCharactersService(charactersDir);
-    const character = characters.create({ name: 'Rin Takahashi' });
+    let character = characters.create({ name: 'Rin Takahashi' });
+    // Mirrors what the "Queue Candidates" route does before submitting — placeholder
+    // records with no imagePath yet, one per seed in the batch.
+    character = characters.update(character.slug, {
+      castingCandidates: [1000, 1001, 1002].map((seed) => ({
+        seed,
+        note: '',
+        createdAt: new Date().toISOString(),
+        imagePath: '',
+      })),
+    })!;
 
     const characterImages = createCharacterImagesService(charactersDir);
     const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
@@ -457,6 +467,14 @@ describe('execution.service', () => {
       expect(
         fs.existsSync(path.join(charactersDir, character.slug, 'casting_batch', 'seed-1001.png')),
       ).to.equal(true);
+
+      // The character record's own castingCandidates.imagePath gets patched too — the tile
+      // grid's pre-SSE initial render (and Phase 9's winner-lock promotion) both read this,
+      // not the job store, which only holds state while a run is actually in flight.
+      const updatedCharacter = characters.get(character.slug);
+      const candidate = updatedCharacter?.castingCandidates.find((c) => c.seed === 1001);
+      expect(candidate?.imagePath).to.equal(path.join('casting_batch', 'seed-1001.png'));
+      expect(updatedCharacter?.castingCandidates.find((c) => c.seed === 1000)?.imagePath).to.equal('');
     } finally {
       socket.close();
       await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));

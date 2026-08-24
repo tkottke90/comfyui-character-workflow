@@ -281,6 +281,18 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
       const dataUrl = `data:image/png;base64,${bytes.toString('base64')}`;
       const relativePath = characterImages.storeCastingCandidate(characterSlug, seed, dataUrl);
 
+      // The tile grid's initial (pre-SSE) render reads candidate.imagePath off the
+      // character record itself — the job store only holds this while a run is in
+      // flight, so a page reload after the process restarts still needs to see it.
+      const character = characters.get(characterSlug);
+      if (character) {
+        characters.update(characterSlug, {
+          castingCandidates: character.castingCandidates.map((c) =>
+            c.seed === seed ? { ...c, imagePath: relativePath } : c,
+          ),
+        });
+      }
+
       await jobStore.set(characterSlug, phaseBindingKey, replaceSubJob({ status: 'done', resultPath: relativePath }));
     } catch (err) {
       await jobStore.set(
