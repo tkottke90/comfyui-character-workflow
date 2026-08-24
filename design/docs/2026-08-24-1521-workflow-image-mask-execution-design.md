@@ -89,6 +89,14 @@ Failure is a first-class outcome, not an afterthought — the engine needs a def
 - **Retry.** Any failed run (connection or execution) can be retried by the user — resubmits the same phase the same way a first attempt would (re-uploads the current image/mask under the same stable filename, submits a new prompt). Retrying does not require re-entering anything.
 - **"Open in ComfyUI"** (deep-linking the user into ComfyUI's own UI at the failed prompt/node for hands-on debugging) would be a nice-to-have if straightforward, but is **not a committed requirement** — don't block on it.
 
+## 8b. Mapping editor type-awareness
+
+Today the mapping editor (`workflow-mapping-detail.njk`) offers the same domain-field dropdown for every node input regardless of what that input actually expects — `parseWorkflowGraph` (`comfyui-workflow.ts`) treats every non-link input as an untyped widget value, so nothing stops mapping `Current Mask` onto a `KSampler.seed`, or mapping both `Current Image` and `Current Mask` onto the same `LoadImage` node.
+
+- **Confirmed assumption:** masks are always imported as images — a mask is a second `LoadImage` node (same `classType` as the image node, not the dedicated `LoadImageMask` node), whose output is converted/fed into something like `SetLatentNoiseMask.mask`. Both the image node and the mask node in a workflow are indistinguishable by `classType` alone.
+- **Scoped to the cheap check only.** `LoadImage.image` is defined by ComfyUI with `{"image_upload": true}` in its `INPUT_TYPES` (confirmed against ComfyUI's own node source/docs) — a purpose-built flag, already reachable via the `/object_info` call `comfyui-client.service.ts` already makes for static-value verification, that reliably identifies "this input wants an uploaded file." The mapping editor should use that flag to **restrict which inputs `Current Image`/`Current Mask` can be mapped onto** to those flagged `image_upload: true` — catching the "mapped to entirely the wrong kind of input" class of mistake.
+- **Explicitly not in scope now: distinguishing the image LoadImage node from the mask LoadImage node.** Since both share `classType: LoadImage`, telling them apart requires following graph edges (which node's output reaches `SetLatentNoiseMask.mask` vs. which feeds the main image pipeline) — and `parseWorkflowGraph` currently discards all link-reference inputs, so the mapping model has no graph-topology awareness at all. Making the editor catch "image and mask mapped to the swapped node" is a bigger, structural change (parsing and exposing link edges) and is deferred as a future item, the same way `computed` mapping support was deferred (§10).
+
 ## 9. Async UI model
 
 - **SSE, not blocking-wait.** Triggering a phase returns immediately with the page rendered in a loading state; a `text/event-stream` connection (per-page-scoped, e.g. `/characters/:slug/<phase>/events`) delivers the completion event.
@@ -101,6 +109,7 @@ Failure is a first-class outcome, not an afterthought — the engine needs a def
 - **Caption authoring** (`.txt` files alongside `finalizedImages/*.png`) — the Kohya-style paired caption file is illustrative of what the folder is *for*, but writing/editing captions is a separate future piece.
 - **LoRA training itself** — this app never trains a LoRA; it only checks for the resulting `.safetensors` file's presence.
 - **`computed` mapping support** (§8) — removed from the mapping editor and unsupported by the resolver for this effort; every mapped value is `domain` or `static` for now.
+- **Graph-edge-aware image/mask mapping validation** (§8b) — the mapping editor gets a cheap `image_upload`-flag-based restriction now, but distinguishing which of two same-`classType` `LoadImage` nodes is the image vs. the mask (by tracing downstream link edges) is a bigger structural change and is future work.
 - Nothing here migrates existing on-disk characters to the new nested directory layout — not needed pre-MVP.
 
 ## 11. Next step
