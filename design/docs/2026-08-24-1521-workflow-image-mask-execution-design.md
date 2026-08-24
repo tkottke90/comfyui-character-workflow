@@ -49,6 +49,7 @@ config/
 - **Finalize = promotion + cleanup, triggered by LoRA existence.** "Finalize" happens once a LoRA has been trained for the character. The app doesn't train the LoRA itself — it **checks for `<slug>.safetensors` on disk** (file-presence check, not a tracked boolean), since training happens externally (e.g. kohya_ss) and this app has no business knowing how to do it. Finalizing promotes the working files that fed the LoRA into `finalizedImages/` and then **deletes every non-finalized working file for the character** ("sweeping up the sawdust" — those assets are no longer needed once the LoRA replaces them).
 - **`finalizedImages/`** is the LoRA training dataset pool backing `character.dataset.{imagesCount, targetMin, targetMax}` — `hero.png`/`hero.txt` is a special-cased always-present entry, everything else is sequentially numbered.
 - A new endpoint is needed to list all of a character's images grouped by finalized/non-finalized, ordered by timestamp.
+- **Character deletion becomes recursive.** `characters.service.ts`'s `remove()` today only deletes the single `<slug>.md` file, which was correct for the old flat layout. With characters living under nested `config/characters/<slug>/` directories (working images, finalized images, and a potential `.safetensors`), deleting a character must remove that entire directory tree — otherwise every deleted character leaves its image data (and, worse, its trained LoRA) behind forever.
 
 ## 5. Mask input — polygon editor
 
