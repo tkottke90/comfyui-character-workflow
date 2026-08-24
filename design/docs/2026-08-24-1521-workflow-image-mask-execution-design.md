@@ -75,7 +75,7 @@ When a casting winner is picked:
 
 Building the engine turned out to be required, not deferrable, because pulling generated images back from ComfyUI needs a reliable way to correlate a `/history` entry with a specific character/phase run — which only works cleanly if this app is the thing that submitted the prompt.
 
-- **Mapping resolver:** for each `NodeMapping`, resolve `domain` via a lodash `_.get`-style path lookup against the character record (now including the new per-phase-binding image/mask paths), `static` as a literal, and `computed` via a **simple substitution DSL** (e.g. `{{character.identityBlock}}, {{view.changeClause}}`-style token replacement — exact grammar TBD at implementation time).
+- **Mapping resolver:** for each `NodeMapping`, resolve `domain` via a lodash `_.get`-style path lookup against the character record (now including the new per-phase-binding image/mask paths), and `static` as a literal. **`computed` is deferred out of this effort** — its resolution semantics (the substitution DSL, and what non-character invocation context like `{{view.changeClause}}` would even draw from) are their own scope and were adding complexity this effort doesn't need. For now every mapped value is either `domain` or `static`. In the Workflow Mapping editor (`workflow-mapping-detail.njk`), the "Computed" option is removed from the `sourceType` select and its "If Computed →" input is dropped from the edit form — not merely disabled, so a user can't select a source type the engine can't execute. The `computed` value stays in `NodeMappingSchema`'s `sourceType` enum (schema-level, unused for now) so existing/future data isn't broken when computed support is eventually built.
 - **Submit pipeline:** clone the version's stored raw graph (`workflow-mapping.service.ts` already persists `v${version}.json`) → upload `Current Image`/`Current Mask` via `/upload/image` (`overwrite: true`) → splice returned filenames into the graph → generate a `client_id` → `POST /prompt` → track the returned `prompt_id`.
 - **Completion + pull:** listen on ComfyUI's `/ws` (scoped by `client_id`) for the `executed` event on that `prompt_id` → use the version's `resultOutput` (`{nodeId, outputIndex, label}`) to find the produced filename in the history entry → pull bytes via `/view` → save into the phase-binding's output directory (§4/§6).
 
@@ -99,6 +99,7 @@ Failure is a first-class outcome, not an afterthought — the engine needs a def
 
 - **Caption authoring** (`.txt` files alongside `finalizedImages/*.png`) — the Kohya-style paired caption file is illustrative of what the folder is *for*, but writing/editing captions is a separate future piece.
 - **LoRA training itself** — this app never trains a LoRA; it only checks for the resulting `.safetensors` file's presence.
+- **`computed` mapping support** (§8) — removed from the mapping editor and unsupported by the resolver for this effort; every mapped value is `domain` or `static` for now.
 - Nothing here migrates existing on-disk characters to the new nested directory layout — not needed pre-MVP.
 
 ## 11. Next step
