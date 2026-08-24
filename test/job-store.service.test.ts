@@ -76,6 +76,28 @@ describe('job-store.service', () => {
     }
   });
 
+  it('onChange fires with the new record on set(), and not for a different key', async () => {
+    const store = createJobStore(dir);
+    try {
+      const received: JobRecord[] = [];
+      const unsubscribe = store.onChange('rin-takahashi', 'refinement_cleanup', (record) => {
+        received.push(record);
+      });
+
+      await store.set('rin-takahashi', 'targeted_fix', SAMPLE); // different key — no callback
+      await store.set('rin-takahashi', 'refinement_cleanup', SAMPLE);
+
+      expect(received).to.have.length(1);
+      expect(received[0]).to.deep.equal(SAMPLE);
+
+      unsubscribe();
+      await store.set('rin-takahashi', 'refinement_cleanup', { ...SAMPLE, status: 'done' });
+      expect(received).to.have.length(1); // unsubscribed — no further callbacks
+    } finally {
+      await store.close();
+    }
+  });
+
   it('deletes a job', async () => {
     const store = createJobStore(dir);
     try {

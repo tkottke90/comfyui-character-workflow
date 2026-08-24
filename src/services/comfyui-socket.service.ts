@@ -65,7 +65,11 @@ export function createComfyUISocket(config: ComfyUISocketConfig): ComfyUISocket 
     });
 
     socket.addEventListener('error', (event) => {
-      emitter.emit('error', event);
+      // Deliberately NOT emitted as the EventEmitter's own 'error' event — Node treats
+      // that name specially and throws (crashing the process) if nothing has called
+      // onError() yet, which is exactly the case at boot before any caller has
+      // subscribed. A distinct internal event name sidesteps that entirely.
+      emitter.emit('socket-error', event);
     });
 
     socket.addEventListener('message', (event) => {
@@ -96,6 +100,6 @@ export function createComfyUISocket(config: ComfyUISocketConfig): ComfyUISocket 
     onMessage: (handler) => emitter.on('message', handler),
     onOpen: (handler) => emitter.on('open', handler),
     onClose: (handler) => emitter.on('close', handler),
-    onError: (handler) => emitter.on('error', handler),
+    onError: (handler) => emitter.on('socket-error', handler),
   };
 }

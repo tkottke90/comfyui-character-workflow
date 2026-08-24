@@ -78,6 +78,42 @@ describe('comfyui-socket.service', () => {
     }
   });
 
+  it('does not crash the process on a connection error with no onError() listener registered', async () => {
+    // Regression test: Node's EventEmitter treats 'error' as a special event name and
+    // throws (crashing the process) if .emit('error', ...) has zero listeners — exactly
+    // what happens at app boot, where connect() is called before anything has subscribed
+    // to onError(). Deliberately registers no error handler at all here; if this internal
+    // event were ever emitted as plain 'error' again, this test (or the whole suite)
+    // would crash the process rather than fail cleanly.
+    const stub = await startStubWsServer();
+    const port = stub.port;
+    await new Promise<void>((resolve) => stub.wss.close(() => resolve()));
+
+    const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${port}`, clientId: 'client-1' });
+    socket.connect();
+
+    // Give the refused connection a moment to fire its error event.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(socket.isConnected()).to.equal(false);
+    socket.close();
+  });
+
+  it('still delivers the error to onError() when someone has subscribed', async () => {
+    const stub = await startStubWsServer();
+    const port = stub.port;
+    await new Promise<void>((resolve) => stub.wss.close(() => resolve()));
+
+    const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${port}`, clientId: 'client-1' });
+    const errored = waitFor<void>((resolve) => socket.onError(() => resolve()));
+
+    socket.connect();
+    await errored;
+
+    expect(socket.isConnected()).to.equal(false);
+    socket.close();
+  });
+
   it('reports disconnected after close()', async () => {
     const stub = await startStubWsServer();
     const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${stub.port}`, clientId: 'client-1' });

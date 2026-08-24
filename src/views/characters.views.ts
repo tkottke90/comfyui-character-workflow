@@ -4,6 +4,8 @@ import { Application } from '../types/application';
 import { CharactersService } from '../services/characters.service';
 import { TemplatesService } from '../services/templates.service';
 import { CharacterImagesService } from '../services/character-images.service';
+import { ExecutionService } from '../services/execution.service';
+import { JobRecord, JobStore } from '../services/job-store.service';
 import { CharacterRecord } from '../schemas/character.schema';
 import { CharacterAttributesConfigSchema } from '../schemas/config.schema';
 import { NotFoundError, BadRequestError } from '../errors/http.errors';
@@ -83,11 +85,19 @@ function baseContext(character: CharacterRecord) {
   };
 }
 
+function isJobActive(record: JobRecord | undefined): boolean {
+  if (!record) return false;
+  if (record.kind === 'single') return record.status === 'queued' || record.status === 'running';
+  return record.subJobs.some((s) => s.status === 'queued' || s.status === 'running');
+}
+
 export function createCharactersRouter(
   app: Application,
   characters: CharactersService,
   templates: TemplatesService,
   characterImages: CharacterImagesService,
+  executionService: ExecutionService,
+  jobStore: JobStore,
 ): Router {
   const router = Router();
 
@@ -174,6 +184,74 @@ export function createCharactersRouter(
       });
     },
   );
+
+  router.post('/:slug/images/:phaseBindingKey', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = param(req, 'phaseBindingKey');
+    const kind = req.body.kind === 'mask' ? 'mask' : 'image';
+    const dataUrl = String(req.body.dataUrl ?? '');
+    if (!dataUrl) throw new BadRequestError('An image is required');
+
+    characterImages.storeWorkingFile(character.slug, phaseBindingKey, kind, dataUrl);
+    res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+  });
+
+  // ---- Execution: trigger a phase's active workflow, stream its progress ----
+  //
+  // casting_batch is deliberately excluded from the generic single-result run route —
+  // it needs submitCastingBatch's N-separate-prompts handling and its own tile-grid UI,
+  // which isn't wired up yet (tracked as follow-up work, not silently done here).
+
+  router.post('/:slug/run/:phaseBindingKey', async (req: Request, res: Response, next: NextFunction) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = param(req, 'phaseBindingKey');
+
+    if (phaseBindingKey === 'casting_batch') {
+      throw new BadRequestError('Casting batch is submitted separately, not through this route');
+    }
+
+    // Best-effort duplicate-submit guard — not perfectly race-free against a second
+    // request landing between this check and submitSingle(), but sufficient for a
+    // single-user local app; a real lock isn't worth the complexity here.
+    if (isJobActive(jobStore.get(character.slug, phaseBindingKey))) {
+      res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+      return;
+    }
+
+    try {
+      await executionService.submitSingle(character.slug, phaseBindingKey);
+    } catch (err) {
+      next(err);
+      return;
+    }
+
+    res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+  });
+
+  router.get('/:slug/events/:phaseBindingKey', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = param(req, 'phaseBindingKey');
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.flushHeaders();
+
+    const send = (record: JobRecord | undefined) => {
+      res.write(`data: ${JSON.stringify(record ?? null)}\n\n`);
+    };
+
+    // Emit the current known state immediately on connect — a page reload opens a
+    // brand-new connection and must see where things actually stand right now, not
+    // only future transitions, or a reload racing a just-finished job would leave
+    // the page stuck showing "loading" forever.
+    send(jobStore.get(character.slug, phaseBindingKey));
+
+    const unsubscribe = jobStore.onChange(character.slug, phaseBindingKey, send);
+    req.on('close', () => unsubscribe());
+  });
 
   // ---- Spec builder ----
 
