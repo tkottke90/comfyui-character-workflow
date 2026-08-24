@@ -12,6 +12,7 @@ import {
   deriveChecklist,
   deriveStatus,
   findImagePath,
+  forceCompleteThroughCasting,
   getNextAction,
   mergeAttributeSuggestions,
   overviewChecklistRows,
@@ -281,6 +282,30 @@ describe('parsePhaseChecklist', () => {
   it('treats a missing body (nothing checked) as all-false', () => {
     const checklist = parsePhaseChecklist('dataset', undefined);
     expect(Object.values(checklist).every((v) => v === false)).to.equal(true);
+  });
+});
+
+describe('forceCompleteThroughCasting', () => {
+  it('sets every specification/preflight/casting item true, leaving other phases untouched', () => {
+    const result = forceCompleteThroughCasting(emptyChecklist());
+
+    for (const phase of ['specification', 'preflight', 'casting'] as const) {
+      for (const item of CHECKLIST_DEFINITIONS[phase]) {
+        expect(result[`${phase}.${item.id}`], `${phase}.${item.id}`).to.equal(true);
+      }
+    }
+
+    for (const phase of ['refinement', 'anchorKit', 'downstreamValidation', 'dataset'] as const) {
+      for (const item of CHECKLIST_DEFINITIONS[phase]) {
+        expect(result[`${phase}.${item.id}`], `${phase}.${item.id}`).to.equal(false);
+      }
+    }
+  });
+
+  it('preserves already-true items outside the force-completed phases', () => {
+    const checklist = { ...emptyChecklist(), 'refinement.hands_checked': true };
+    const result = forceCompleteThroughCasting(checklist);
+    expect(result['refinement.hands_checked']).to.equal(true);
   });
 });
 

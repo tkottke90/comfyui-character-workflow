@@ -180,6 +180,27 @@ export function parsePhaseChecklist(
   return result;
 }
 
+const LOCK_FORCE_COMPLETE_PHASES: ChecklistPhase[] = ['specification', 'preflight', 'casting'];
+
+/**
+ * Casting-lock is meant to mean "every item through Casting & lock is fully checked off" —
+ * force-completes every item in those three phases rather than leaving it to whatever a
+ * user happened to tick manually. Only specification.attrs_filled/identity_compiled are
+ * derived (not force-writable — see deriveChecklist), which is why locking has its own
+ * precondition requiring those two to already be true before this is called.
+ */
+export function forceCompleteThroughCasting(
+  checklist: Record<string, boolean>,
+): Record<string, boolean> {
+  const next = { ...checklist };
+  for (const phase of LOCK_FORCE_COMPLETE_PHASES) {
+    for (const item of CHECKLIST_DEFINITIONS[phase]) {
+      next[`${phase}.${item.id}`] = true;
+    }
+  }
+  return next;
+}
+
 export function defaultAuditRows(attributes: Attributes): AuditRow[] {
   return AUDIT_ATTRIBUTE_LABELS.map(([key, label]) => ({
     attribute: label,

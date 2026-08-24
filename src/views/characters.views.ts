@@ -17,6 +17,7 @@ import {
   defaultAuditRows,
   deriveChecklist,
   findImagePath,
+  forceCompleteThroughCasting,
   getNextAction,
   mergeAttributeSuggestions,
   overviewChecklistRows,
@@ -446,16 +447,37 @@ export function createCharactersRouter(
       throw new BadRequestError('Resolve every flagged attribute before locking');
     }
 
+    // deriveChecklist() recomputes these two from live character state on every render, so
+    // force-writing them true here would just get silently reverted the next time the page
+    // loads if the underlying data isn't actually complete — refuse to lock instead, which
+    // keeps "every item through Casting & lock fully checked off" always literally true
+    // right after a successful lock.
+    const liveChecklist = deriveChecklist(character);
+    if (!liveChecklist['specification.attrs_filled'] || !liveChecklist['specification.identity_compiled']) {
+      throw new BadRequestError(
+        'Every universal attribute must be filled and the identity block compiled before locking',
+      );
+    }
+
+    const winningCandidate = character.castingCandidates.find(
+      (c) => c.seed === character.winnerCandidateSeed,
+    );
+    if (winningCandidate?.imagePath) {
+      // One less manual step: the winner's own image becomes 002-Face's Current Image —
+      // a filesystem copy via character-images.service, no execution engine involved.
+      characterImages.promoteToPhaseBinding(
+        character.slug,
+        winningCandidate.imagePath,
+        'refinement_face_detail',
+      );
+    }
+
     characters.update(character.slug, {
       locked_seed: character.winnerCandidateSeed,
       identityBlockFrozen: true,
-      checklist: {
-        ...character.checklist,
-        'casting.winner_selected': true,
-        'casting.reverse_spec': true,
-      },
+      checklist: forceCompleteThroughCasting(character.checklist),
     });
-    res.redirect(`/characters/${character.slug}/refinement`);
+    res.redirect(`/characters/${character.slug}`);
   });
 
   // ---- Refinement ----
