@@ -9,6 +9,9 @@ export const ComfyUiConfigSchema = z.object({
 });
 export type ComfyUiConfig = z.infer<typeof ComfyUiConfigSchema>;
 
+export const CharacterAttributesConfigSchema = z.record(z.string(), z.array(z.string())).default({});
+export type CharacterAttributesConfig = z.infer<typeof CharacterAttributesConfigSchema>;
+
 export const ConfigSchema = z.object({
   port: z.number().default(3000),
   host: z.string().default('localhost'),
@@ -18,5 +21,6 @@ export const ConfigSchema = z.object({
       enabled: true
     }
   }),
-  'comfy-ui': ComfyUiConfigSchema.default(() => ComfyUiConfigSchema.parse({}))
+  'comfy-ui': ComfyUiConfigSchema.default(() => ComfyUiConfigSchema.parse({})),
+  'character-attributes': CharacterAttributesConfigSchema
 });
