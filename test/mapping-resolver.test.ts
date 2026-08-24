@@ -106,6 +106,29 @@ describe('resolveMapping', () => {
     expect(() => resolveMapping(version, characterRecord, characterImages)).to.throw(/empty/);
   });
 
+  describe('stage_input.casting_seed', () => {
+    it('throws when no per-candidate seed is supplied in the resolution context', () => {
+      const characterImages = createCharacterImagesService(dir);
+      const version = makeVersion(
+        [node({ sourceType: 'domain', sourceValue: 'stage_input.casting_seed' })],
+        null,
+      );
+      expect(() => resolveMapping(version, characterRecord, characterImages)).to.throw(
+        /no per-candidate seed/,
+      );
+    });
+
+    it('resolves to the supplied seed as a literal', () => {
+      const characterImages = createCharacterImagesService(dir);
+      const version = makeVersion(
+        [node({ sourceType: 'domain', sourceValue: 'stage_input.casting_seed' })],
+        null,
+      );
+      const resolved = resolveMapping(version, characterRecord, characterImages, { castingSeed: 4207 });
+      expect(resolved[0].resolved).to.deep.equal({ kind: 'literal', value: '4207' });
+    });
+  });
+
   it('throws for an unsupported stage_input field other than current_image/current_mask', () => {
     const characterImages = createCharacterImagesService(dir);
     const version = makeVersion(

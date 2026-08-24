@@ -13,10 +13,20 @@ export class UnresolvableMappingError extends Error {
 
 const CURRENT_IMAGE_PATH = 'stage_input.current_image';
 const CURRENT_MASK_PATH = 'stage_input.current_mask';
+const CASTING_SEED_PATH = 'stage_input.casting_seed';
 
 export type ResolvedNodeValue =
   | { kind: 'literal'; value: string }
   | { kind: 'image'; role: 'image' | 'mask'; filePath: string; relativePath: string };
+
+/**
+ * Per-invocation values a caller supplies at resolve time, rather than something the
+ * resolver can look up on its own — currently just the per-candidate seed a casting-batch
+ * submission overrides on each of its N separate /prompt calls.
+ */
+export interface ResolutionContext {
+  castingSeed?: number;
+}
 
 export interface ResolvedMapping {
   nodeId: string;
@@ -82,12 +92,21 @@ function resolveDomainField(
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
+  context: ResolutionContext,
 ): ResolvedNodeValue {
   if (sourceValue === CURRENT_IMAGE_PATH) {
     return resolveCurrentImageOrMask('image', version, character, characterImages);
   }
   if (sourceValue === CURRENT_MASK_PATH) {
     return resolveCurrentImageOrMask('mask', version, character, characterImages);
+  }
+  if (sourceValue === CASTING_SEED_PATH) {
+    if (context.castingSeed === undefined) {
+      throw new UnresolvableMappingError(
+        'stage_input.casting_seed is mapped, but no per-candidate seed was supplied for this run',
+      );
+    }
+    return { kind: 'literal', value: String(context.castingSeed) };
   }
   if (sourceValue.startsWith('stage_input.')) {
     throw new UnresolvableMappingError(
@@ -107,13 +126,14 @@ function resolveNode(
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
+  context: ResolutionContext,
 ): ResolvedNodeValue {
   if (node.sourceType === 'static') {
     return { kind: 'literal', value: node.sourceValue };
   }
 
   if (node.sourceType === 'domain') {
-    return resolveDomainField(node.sourceValue, version, character, characterImages);
+    return resolveDomainField(node.sourceValue, version, character, characterImages, context);
   }
 
   // 'computed' is deferred (removed from the mapping editor, but the schema still allows
@@ -137,6 +157,7 @@ export function resolveMapping(
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
+  context: ResolutionContext = {},
 ): ResolvedMapping[] {
   return version.nodes
     .filter((node) => node.sourceType !== 'unset')
@@ -144,6 +165,6 @@ export function resolveMapping(
       nodeId: node.nodeId,
       inputName: node.inputName,
       classType: node.classType,
-      resolved: resolveNode(node, version, character, characterImages),
+      resolved: resolveNode(node, version, character, characterImages, context),
     }));
 }

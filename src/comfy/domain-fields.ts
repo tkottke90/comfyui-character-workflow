@@ -41,6 +41,12 @@ export const DOMAIN_FIELDS: DomainField[] = [
   // per phase binding.
   { path: 'stage_input.current_image', label: 'Current image', kind: 'stage-input' },
   { path: 'stage_input.current_mask', label: 'Current mask', kind: 'stage-input' },
+  // Also special-cased by the resolver, but supplied per-invocation rather than from
+  // storage — the execution engine substitutes startSeed + i for each of the N separate
+  // /prompt submissions a casting batch makes. The user explicitly maps this onto
+  // whichever node/input is actually the seed (e.g. KSampler.seed) in the imported
+  // casting workflow — the engine never guesses which input that is.
+  { path: 'stage_input.casting_seed', label: 'Casting seed (per-candidate)', kind: 'stage-input' },
   { path: 'stage_input.horizontal_angle', label: 'Horizontal angle', kind: 'stage-input' },
   { path: 'stage_input.vertical_angle', label: 'Vertical angle', kind: 'stage-input' },
   { path: 'stage_input.zoom', label: 'Zoom', kind: 'stage-input' },
