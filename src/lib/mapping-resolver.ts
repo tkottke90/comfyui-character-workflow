@@ -16,7 +16,7 @@ const CURRENT_MASK_PATH = 'stage_input.current_mask';
 
 export type ResolvedNodeValue =
   | { kind: 'literal'; value: string }
-  | { kind: 'image'; filePath: string; relativePath: string };
+  | { kind: 'image'; role: 'image' | 'mask'; filePath: string; relativePath: string };
 
 export interface ResolvedMapping {
   nodeId: string;
@@ -51,7 +51,7 @@ function phaseBindingKeyForVersion(version: WorkflowVersion): string {
 }
 
 function resolveCurrentImageOrMask(
-  kind: 'image' | 'mask',
+  role: 'image' | 'mask',
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
@@ -60,17 +60,18 @@ function resolveCurrentImageOrMask(
   const { working } = characterImages.listImages(character.slug);
 
   const latest = working
-    .filter((file) => file.phaseBindingKey === phaseBindingKey && file.kind === kind)
+    .filter((file) => file.phaseBindingKey === phaseBindingKey && file.kind === role)
     .sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))[0];
 
   if (!latest) {
     throw new UnresolvableMappingError(
-      `No ${kind} has been uploaded yet for phase binding "${phaseBindingKey}"`,
+      `No ${role} has been uploaded yet for phase binding "${phaseBindingKey}"`,
     );
   }
 
   return {
     kind: 'image',
+    role,
     filePath: characterImages.resolvePath(character.slug, latest.relativePath),
     relativePath: latest.relativePath,
   };
