@@ -67,6 +67,16 @@ const VIEW_DEFINITIONS: Array<{
   },
 ];
 
+// Refinement is the one multi-step phase page that maps a single UI step selector onto
+// three distinct phase bindings (three separate workflow slots, each independently
+// mappable/runnable) — this is the lookup from step number to the phase-binding key the
+// run/images/events routes are keyed by.
+const REFINEMENT_PHASE_BINDING_BY_STEP: Record<number, string> = {
+  1: 'refinement_face_detail',
+  2: 'refinement_cleanup',
+  3: 'refinement_upscale',
+};
+
 function param(req: Request, name: string): string {
   const value = req.params[name];
   return Array.isArray(value) ? value[0] : value;
@@ -431,9 +441,21 @@ export function createCharactersRouter(
 
   router.get('/:slug/refinement', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = REFINEMENT_PHASE_BINDING_BY_STEP[character.refinement.currentStep];
+    const { working } = characterImages.listImages(character.slug);
+    // working[] is sorted newest first, so the first match per kind is the current one.
+    const currentImage = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'image');
+    const currentMask = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'mask');
+    const job = jobStore.get(character.slug, phaseBindingKey);
+
     res.render('characters/refinement.njk', {
       ...baseContext(character),
       items: CHECKLIST_DEFINITIONS.refinement,
+      phaseBindingKey,
+      currentImage,
+      currentMask,
+      job: job ?? null,
+      jobActive: isJobActive(job),
     });
   });
 
