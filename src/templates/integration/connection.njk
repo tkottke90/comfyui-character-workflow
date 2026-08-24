@@ -70,6 +70,18 @@
             <span class="text-steel-500 dark:text-steel-400 font-semibold">Queue</span>
             {{ ui.mono(status.queue.running + ' running, ' + status.queue.pending + ' pending') }}
           </div>
+        {% endif %}
+        <div class="flex justify-between items-baseline py-1.5 border-b border-steel-200 dark:border-steel-800 text-[13.5px]">
+          <span class="text-steel-500 dark:text-steel-400 font-semibold">Websocket (progress/completion events)</span>
+          {% if wsStatus.connected %}
+            {{ ui.pill('Connected', 'success') }}
+          {% elif wsStatus.exhausted %}
+            {{ ui.pill('Disconnected — retries exhausted', 'danger') }}
+          {% else %}
+            {{ ui.pill('Reconnecting… (attempt ' + wsStatus.attempts + ' of 5)', 'neutral') }}
+          {% endif %}
+        </div>
+        {% if status.ok %}
           {% if status.systemStats.gpuName %}
             <div class="flex justify-between items-baseline py-1.5 border-b border-steel-200 dark:border-steel-800 text-[13.5px]">
               <span class="text-steel-500 dark:text-steel-400 font-semibold">GPU / VRAM</span>
@@ -91,6 +103,9 @@
         </form>
         <form method="post" action="/integration/connection/free-memory">
           {{ ui.button('Free memory', 'secondary', 'submit', not status.ok) }}
+        </form>
+        <form method="post" action="/integration/connection/ws-reset">
+          {{ ui.button('Reset connection', 'secondary', 'submit', wsStatus.connected) }}
         </form>
       </div>
     </div>

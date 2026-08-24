@@ -33,8 +33,12 @@ export interface CharactersService {
 export function createCharactersService(dir: string): CharactersService {
   fs.mkdirSync(dir, { recursive: true });
 
+  function characterDir(slug: string): string {
+    return path.join(dir, slug);
+  }
+
   function filePath(slug: string): string {
-    return path.join(dir, `${slug}.md`);
+    return path.join(characterDir(slug), `${slug}.md`);
   }
 
   function readSlug(slug: string): CharacterRecord | undefined {
@@ -57,9 +61,9 @@ export function createCharactersService(dir: string): CharactersService {
   return {
     list() {
       return fs
-        .readdirSync(dir)
-        .filter((file) => file.endsWith('.md'))
-        .map((file) => readSlug(file.slice(0, -3)))
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => readSlug(entry.name))
         .filter((record): record is CharacterRecord => record !== undefined)
         .sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0));
     },
@@ -85,6 +89,7 @@ export function createCharactersService(dir: string): CharactersService {
       data.status = deriveStatus(deriveChecklist(data));
 
       const record: CharacterRecord = { slug, ...data };
+      fs.mkdirSync(path.join(characterDir(slug), 'finalizedImages'), { recursive: true });
       write(record);
       return record;
     },
@@ -106,9 +111,9 @@ export function createCharactersService(dir: string): CharactersService {
     },
 
     remove(slug) {
-      const file = filePath(slug);
-      if (!fs.existsSync(file)) return false;
-      fs.unlinkSync(file);
+      const dirToRemove = characterDir(slug);
+      if (!fs.existsSync(dirToRemove)) return false;
+      fs.rmSync(dirToRemove, { recursive: true, force: true });
       return true;
     },
   };

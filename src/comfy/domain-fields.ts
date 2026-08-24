@@ -5,6 +5,16 @@ export interface DomainField {
 }
 
 /**
+ * The two domain-field paths that only make sense mapped onto a ComfyUI node input
+ * ComfyUI itself flags `image_upload: true` (e.g. LoadImage.image) — used by the mapping
+ * editor to hide them on every other kind of input, rather than offering them everywhere.
+ */
+export const IMAGE_DOMAIN_FIELD_PATHS = new Set([
+  'stage_input.current_image',
+  'stage_input.current_mask',
+]);
+
+/**
  * Mappable "Domain field" sources for the workflow mapping editor.
  *
  * The "character.*" entries mirror the scalar fields captured in a character's
@@ -22,7 +32,21 @@ export interface DomainField {
  */
 export const DOMAIN_FIELDS: DomainField[] = [
   // Stage inputs — supplied at invocation time, not stored on the character.
-  { path: 'uploaded_image.hero', label: 'Hero image (uploaded/current)', kind: 'stage-input' },
+  //
+  // current_image/current_mask are special-cased by the execution engine's mapping
+  // resolver: they don't resolve via a path lookup against the character record like
+  // every other entry here. They resolve against phase-binding-keyed storage — "whichever
+  // phase binding this workflow version is bound to" (WorkflowVersion.boundPhaseSlotId) —
+  // so the same two fields work for every image-consuming phase without one dropdown entry
+  // per phase binding.
+  { path: 'stage_input.current_image', label: 'Current image', kind: 'stage-input' },
+  { path: 'stage_input.current_mask', label: 'Current mask', kind: 'stage-input' },
+  // Also special-cased by the resolver, but supplied per-invocation rather than from
+  // storage — the execution engine substitutes startSeed + i for each of the N separate
+  // /prompt submissions a casting batch makes. The user explicitly maps this onto
+  // whichever node/input is actually the seed (e.g. KSampler.seed) in the imported
+  // casting workflow — the engine never guesses which input that is.
+  { path: 'stage_input.casting_seed', label: 'Casting seed (per-candidate)', kind: 'stage-input' },
   { path: 'stage_input.horizontal_angle', label: 'Horizontal angle', kind: 'stage-input' },
   { path: 'stage_input.vertical_angle', label: 'Vertical angle', kind: 'stage-input' },
   { path: 'stage_input.zoom', label: 'Zoom', kind: 'stage-input' },

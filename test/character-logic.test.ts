@@ -1,5 +1,10 @@
 import { expect } from 'chai';
-import { AttributesSchema, CharacterSchema } from '../src/schemas/character.schema';
+import {
+  AttributesSchema,
+  CastingCandidateSchema,
+  CharacterSchema,
+  ImageAssetSchema,
+} from '../src/schemas/character.schema';
 import { emptyChecklist, CHECKLIST_DEFINITIONS } from '../src/checklist/definitions';
 import {
   compileIdentityBlock,
@@ -7,6 +12,7 @@ import {
   deriveChecklist,
   deriveStatus,
   findImagePath,
+  forceCompleteThroughCasting,
   getNextAction,
   mergeAttributeSuggestions,
   overviewChecklistRows,
@@ -279,6 +285,30 @@ describe('parsePhaseChecklist', () => {
   });
 });
 
+describe('forceCompleteThroughCasting', () => {
+  it('sets every specification/preflight/casting item true, leaving other phases untouched', () => {
+    const result = forceCompleteThroughCasting(emptyChecklist());
+
+    for (const phase of ['specification', 'preflight', 'casting'] as const) {
+      for (const item of CHECKLIST_DEFINITIONS[phase]) {
+        expect(result[`${phase}.${item.id}`], `${phase}.${item.id}`).to.equal(true);
+      }
+    }
+
+    for (const phase of ['refinement', 'anchorKit', 'downstreamValidation', 'dataset'] as const) {
+      for (const item of CHECKLIST_DEFINITIONS[phase]) {
+        expect(result[`${phase}.${item.id}`], `${phase}.${item.id}`).to.equal(false);
+      }
+    }
+  });
+
+  it('preserves already-true items outside the force-completed phases', () => {
+    const checklist = { ...emptyChecklist(), 'refinement.hands_checked': true };
+    const result = forceCompleteThroughCasting(checklist);
+    expect(result['refinement.hands_checked']).to.equal(true);
+  });
+});
+
 describe('defaultAuditRows', () => {
   it('builds one row per audited attribute, seeded from the spec', () => {
     const attributes = AttributesSchema.parse({ skin_tone: 'Fair', hair: 'Black' });
@@ -293,11 +323,39 @@ describe('defaultAuditRows', () => {
 
 describe('findImagePath', () => {
   it('returns the path for a matching label', () => {
-    const images = [{ label: 'Hero full-body', path: 'hero.png', notes: '' }];
+    const images = [{ label: 'Hero full-body', path: 'hero.png', maskPath: '', notes: '' }];
     expect(findImagePath(images, 'Hero full-body')).to.equal('hero.png');
   });
 
   it('returns an empty string when no image has that label', () => {
     expect(findImagePath([], 'Hero full-body')).to.equal('');
+  });
+});
+
+describe('ImageAssetSchema', () => {
+  it('defaults maskPath to an empty string', () => {
+    expect(ImageAssetSchema.parse({ label: 'Hero full-body' }).maskPath).to.equal('');
+  });
+
+  it('accepts an explicit maskPath', () => {
+    expect(
+      ImageAssetSchema.parse({ label: 'Hero full-body', maskPath: 'mask.png' }).maskPath,
+    ).to.equal('mask.png');
+  });
+});
+
+describe('CastingCandidateSchema', () => {
+  it('defaults imagePath to an empty string', () => {
+    const candidate = CastingCandidateSchema.parse({ seed: 42, createdAt: '2026-08-24' });
+    expect(candidate.imagePath).to.equal('');
+  });
+
+  it('accepts an explicit imagePath', () => {
+    const candidate = CastingCandidateSchema.parse({
+      seed: 42,
+      createdAt: '2026-08-24',
+      imagePath: 'seed-42.png',
+    });
+    expect(candidate.imagePath).to.equal('seed-42.png');
   });
 });

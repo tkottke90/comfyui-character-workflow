@@ -1,10 +1,15 @@
-import { Router, Request, Response } from 'express';
+import path from 'node:path';
+import { Router, Request, Response, NextFunction } from 'express';
 import { Application } from '../types/application';
 import { CharactersService } from '../services/characters.service';
 import { TemplatesService } from '../services/templates.service';
+import { CharacterImagesService } from '../services/character-images.service';
+import { ExecutionService } from '../services/execution.service';
+import { JobRecord, JobStore } from '../services/job-store.service';
 import { CharacterRecord } from '../schemas/character.schema';
 import { CharacterAttributesConfigSchema } from '../schemas/config.schema';
 import { NotFoundError, BadRequestError } from '../errors/http.errors';
+import { sanitizeSegment } from '../lib/path-sanitize';
 import { CHECKLIST_DEFINITIONS } from '../checklist/definitions';
 import { DEFAULT_ATTRIBUTE_SUGGESTIONS } from '../lib/character-attribute-defaults';
 import {
@@ -12,6 +17,7 @@ import {
   defaultAuditRows,
   deriveChecklist,
   findImagePath,
+  forceCompleteThroughCasting,
   getNextAction,
   mergeAttributeSuggestions,
   overviewChecklistRows,
@@ -62,6 +68,16 @@ const VIEW_DEFINITIONS: Array<{
   },
 ];
 
+// Refinement is the one multi-step phase page that maps a single UI step selector onto
+// three distinct phase bindings (three separate workflow slots, each independently
+// mappable/runnable) — this is the lookup from step number to the phase-binding key the
+// run/images/events routes are keyed by.
+const REFINEMENT_PHASE_BINDING_BY_STEP: Record<number, string> = {
+  1: 'refinement_face_detail',
+  2: 'refinement_cleanup',
+  3: 'refinement_upscale',
+};
+
 function param(req: Request, name: string): string {
   const value = req.params[name];
   return Array.isArray(value) ? value[0] : value;
@@ -80,10 +96,19 @@ function baseContext(character: CharacterRecord) {
   };
 }
 
+function isJobActive(record: JobRecord | undefined): boolean {
+  if (!record) return false;
+  if (record.kind === 'single') return record.status === 'queued' || record.status === 'running';
+  return record.subJobs.some((s) => s.status === 'queued' || s.status === 'running');
+}
+
 export function createCharactersRouter(
   app: Application,
   characters: CharactersService,
   templates: TemplatesService,
+  characterImages: CharacterImagesService,
+  executionService: ExecutionService,
+  jobStore: JobStore,
 ): Router {
   const router = Router();
 
@@ -117,6 +142,126 @@ export function createCharactersRouter(
   router.post('/:slug/delete', (req: Request, res: Response) => {
     characters.remove(param(req, 'slug'));
     res.redirect('/characters');
+  });
+
+  // ---- Character image storage ----
+  //
+  // These serve files out of a character's own directory tree (working images/masks per
+  // phase binding, plus finalizedImages/), which also holds that character's <slug>.md and
+  // eventually a <slug>.safetensors — unlike templates.service.ts's isolated uploads/
+  // subdirectory, there's no single folder here that's safe to blanket-mount with
+  // express.static. Every route below is scoped to a specific subdirectory shape
+  // (/images/file/<phaseBindingKey>/<filename> or /images/finalized/<filename>), which
+  // structurally can never address the character's root-level .md/.safetensors files —
+  // those aren't reachable by any path this router accepts.
+  const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|webp)$/i;
+
+  router.get('/:slug/images', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.json(characterImages.listImages(character.slug));
+  });
+
+  router.get(
+    '/:slug/images/finalized/:filename',
+    (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const filename = sanitizeSegment(param(req, 'filename'));
+      if (!IMAGE_EXTENSION_PATTERN.test(filename)) throw new NotFoundError('Not an image file');
+
+      const filePath = characterImages.resolvePath(
+        character.slug,
+        path.join('finalizedImages', filename),
+      );
+      res.sendFile(filePath, (err) => {
+        if (err) next(new NotFoundError('Image not found'));
+      });
+    },
+  );
+
+  router.get(
+    '/:slug/images/file/:phaseBindingKey/:filename',
+    (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const phaseBindingKey = sanitizeSegment(param(req, 'phaseBindingKey'));
+      const filename = sanitizeSegment(param(req, 'filename'));
+      if (!IMAGE_EXTENSION_PATTERN.test(filename)) throw new NotFoundError('Not an image file');
+
+      const filePath = characterImages.resolvePath(
+        character.slug,
+        path.join(phaseBindingKey, filename),
+      );
+      res.sendFile(filePath, (err) => {
+        if (err) next(new NotFoundError('Image not found'));
+      });
+    },
+  );
+
+  router.post('/:slug/images/:phaseBindingKey', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = param(req, 'phaseBindingKey');
+    const kind = req.body.kind === 'mask' ? 'mask' : 'image';
+    const dataUrl = String(req.body.dataUrl ?? '');
+    if (!dataUrl) throw new BadRequestError('An image is required');
+
+    characterImages.storeWorkingFile(character.slug, phaseBindingKey, kind, dataUrl);
+    res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+  });
+
+  // ---- Execution: trigger a phase's active workflow, stream its progress ----
+  //
+  // casting_batch is deliberately excluded from the generic single-result run route —
+  // it needs submitCastingBatch's N-separate-prompts handling and its own tile-grid UI,
+  // which isn't wired up yet (tracked as follow-up work, not silently done here).
+
+  router.post('/:slug/run/:phaseBindingKey', async (req: Request, res: Response, next: NextFunction) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = param(req, 'phaseBindingKey');
+
+    if (phaseBindingKey === 'casting_batch') {
+      throw new BadRequestError('Casting batch is submitted separately, not through this route');
+    }
+
+    // Best-effort duplicate-submit guard — not perfectly race-free against a second
+    // request landing between this check and submitSingle(), but sufficient for a
+    // single-user local app; a real lock isn't worth the complexity here.
+    if (isJobActive(jobStore.get(character.slug, phaseBindingKey))) {
+      res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+      return;
+    }
+
+    try {
+      await executionService.submitSingle(character.slug, phaseBindingKey);
+    } catch (err) {
+      next(err);
+      return;
+    }
+
+    res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+  });
+
+  router.get('/:slug/events/:phaseBindingKey', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = param(req, 'phaseBindingKey');
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.flushHeaders();
+
+    const send = (record: JobRecord | undefined) => {
+      res.write(`data: ${JSON.stringify(record ?? null)}\n\n`);
+    };
+
+    // Emit the current known state immediately on connect — a page reload opens a
+    // brand-new connection and must see where things actually stand right now, not
+    // only future transitions, or a reload racing a just-finished job would leave
+    // the page stuck showing "loading" forever.
+    send(jobStore.get(character.slug, phaseBindingKey));
+
+    const unsubscribe = jobStore.onChange(character.slug, phaseBindingKey, send);
+    req.on('close', () => unsubscribe());
   });
 
   // ---- Spec builder ----
@@ -210,32 +355,54 @@ export function createCharactersRouter(
 
   router.get('/:slug/casting/batch', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
-    res.render('characters/casting_batch.njk', baseContext(character));
-  });
-
-  router.post('/:slug/casting/batch/candidates', (req: Request, res: Response) => {
-    const character = getCharacterOr404(characters, param(req, 'slug'));
-    const startSeed = Number(req.body.startSeed);
-    const count = Math.min(Math.max(Number(req.body.count) || 1, 1), 16);
-    if (!Number.isFinite(startSeed))
-      throw new BadRequestError('A numeric starting seed is required');
-
-    const createdAt = new Date().toISOString();
-    const newCandidates = Array.from({ length: count }, (_, i) => ({
-      seed: startSeed + i,
-      note: '',
-      createdAt,
-    }));
-
-    characters.update(character.slug, {
-      castingCandidates: [...character.castingCandidates, ...newCandidates],
-      checklist: {
-        ...character.checklist,
-        'casting.variance_strategy': true,
-      },
+    res.render('characters/casting_batch.njk', {
+      ...baseContext(character),
+      jobActive: isJobActive(jobStore.get(character.slug, 'casting_batch')),
     });
-    res.redirect(`/characters/${character.slug}/casting/batch`);
   });
+
+  router.post(
+    '/:slug/casting/batch/candidates',
+    async (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const startSeed = Number(req.body.startSeed);
+      const count = Math.min(Math.max(Number(req.body.count) || 1, 1), 16);
+      if (!Number.isFinite(startSeed))
+        throw new BadRequestError('A numeric starting seed is required');
+
+      // Same best-effort duplicate-submit guard as the single-run route — a batch already
+      // in flight shouldn't be resubmitted from a second click landing before the redirect.
+      if (isJobActive(jobStore.get(character.slug, 'casting_batch'))) {
+        res.redirect(`/characters/${character.slug}/casting/batch`);
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const newCandidates = Array.from({ length: count }, (_, i) => ({
+        seed: startSeed + i,
+        note: '',
+        createdAt,
+        imagePath: '',
+      }));
+
+      characters.update(character.slug, {
+        castingCandidates: [...character.castingCandidates, ...newCandidates],
+        checklist: {
+          ...character.checklist,
+          'casting.variance_strategy': true,
+        },
+      });
+
+      try {
+        await executionService.submitCastingBatch(character.slug, startSeed, count);
+      } catch (err) {
+        next(err);
+        return;
+      }
+
+      res.redirect(`/characters/${character.slug}/casting/batch`);
+    },
+  );
 
   router.post('/:slug/casting/candidates/:seed/select', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
@@ -280,25 +447,58 @@ export function createCharactersRouter(
       throw new BadRequestError('Resolve every flagged attribute before locking');
     }
 
+    // deriveChecklist() recomputes these two from live character state on every render, so
+    // force-writing them true here would just get silently reverted the next time the page
+    // loads if the underlying data isn't actually complete — refuse to lock instead, which
+    // keeps "every item through Casting & lock fully checked off" always literally true
+    // right after a successful lock.
+    const liveChecklist = deriveChecklist(character);
+    if (!liveChecklist['specification.attrs_filled'] || !liveChecklist['specification.identity_compiled']) {
+      throw new BadRequestError(
+        'Every universal attribute must be filled and the identity block compiled before locking',
+      );
+    }
+
+    const winningCandidate = character.castingCandidates.find(
+      (c) => c.seed === character.winnerCandidateSeed,
+    );
+    if (winningCandidate?.imagePath) {
+      // One less manual step: the winner's own image becomes 002-Face's Current Image —
+      // a filesystem copy via character-images.service, no execution engine involved.
+      characterImages.promoteToPhaseBinding(
+        character.slug,
+        winningCandidate.imagePath,
+        'refinement_face_detail',
+      );
+    }
+
     characters.update(character.slug, {
       locked_seed: character.winnerCandidateSeed,
       identityBlockFrozen: true,
-      checklist: {
-        ...character.checklist,
-        'casting.winner_selected': true,
-        'casting.reverse_spec': true,
-      },
+      checklist: forceCompleteThroughCasting(character.checklist),
     });
-    res.redirect(`/characters/${character.slug}/refinement`);
+    res.redirect(`/characters/${character.slug}`);
   });
 
   // ---- Refinement ----
 
   router.get('/:slug/refinement', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = REFINEMENT_PHASE_BINDING_BY_STEP[character.refinement.currentStep];
+    const { working } = characterImages.listImages(character.slug);
+    // working[] is sorted newest first, so the first match per kind is the current one.
+    const currentImage = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'image');
+    const currentMask = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'mask');
+    const job = jobStore.get(character.slug, phaseBindingKey);
+
     res.render('characters/refinement.njk', {
       ...baseContext(character),
       items: CHECKLIST_DEFINITIONS.refinement,
+      phaseBindingKey,
+      currentImage,
+      currentMask,
+      job: job ?? null,
+      jobActive: isJobActive(job),
     });
   });
 
@@ -563,7 +763,11 @@ function upsertImage(
   path: string,
   notes = '',
 ): CharacterRecord['images'] {
-  const existingNotes = images.find((image) => image.label === label)?.notes ?? notes;
+  const existing = images.find((image) => image.label === label);
+  const existingNotes = existing?.notes ?? notes;
   const withoutLabel = images.filter((image) => image.label !== label);
-  return [...withoutLabel, { label, path, notes: notes || existingNotes }];
+  return [
+    ...withoutLabel,
+    { label, path, maskPath: existing?.maskPath ?? '', notes: notes || existingNotes },
+  ];
 }

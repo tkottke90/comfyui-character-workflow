@@ -2,9 +2,15 @@ import path from 'node:path';
 import nunjucks from 'nunjucks';
 import express from 'express';
 import { Application } from '../types/application';
+import { ComfyUiConfigSchema } from '../schemas/config.schema';
 import { createCharactersService } from '../services/characters.service';
+import { createCharacterImagesService } from '../services/character-images.service';
 import { createTemplatesService } from '../services/templates.service';
 import { createWorkflowMappingService } from '../services/workflow-mapping.service';
+import { createComfyUIClient } from '../services/comfyui-client.service';
+import { createComfyUISocket } from '../services/comfyui-socket.service';
+import { createJobStore } from '../services/job-store.service';
+import { createExecutionService } from '../services/execution.service';
 import { createCharactersRouter } from './characters.views';
 import { createTemplatesRouter } from './templates.views';
 import { createIntegrationRouter } from './integration.views';
@@ -20,14 +26,63 @@ export function createViews(app: Application) {
     watch: true,
   });
 
-  const charactersService = createCharactersService(app.config.getConfigDir('characters'));
+  const charactersDir = app.config.getConfigDir('characters');
+  const charactersService = createCharactersService(charactersDir);
+  const characterImagesService = createCharacterImagesService(charactersDir);
   const templatesService = createTemplatesService(app.config.getConfigDir('templates'));
   const workflowMappingService = createWorkflowMappingService(app.config.getConfigDir('workflows'));
+
+  // Execution engine wiring — one shared ComfyUI client + one persistent socket
+  // connection for the app's whole lifetime (not per-request, unlike the Integration
+  // pages' own short-lived clients used only for read-only status/object_info calls).
+  // The socket reconnects itself with capped backoff on an unexpected drop; reconnecting
+  // it when the comfy-ui config changes at runtime is still out of scope — this just gets
+  // a working connection up at boot.
+  const comfyConfig = app.config.loadConfig('comfy-ui', ComfyUiConfigSchema);
+  const comfyClient = createComfyUIClient({
+    baseUrl: comfyConfig.baseUrl,
+    apiKey: comfyConfig.apiKey || undefined,
+  });
+  const comfySocket = createComfyUISocket({
+    baseUrl: comfyConfig.baseUrl,
+    apiKey: comfyConfig.apiKey || undefined,
+    clientId: comfyConfig.clientId,
+  });
+  comfySocket.connect();
+
+  const jobStore = createJobStore(app.config.getConfigDir('jobs'));
+  const executionService = createExecutionService({
+    workflowMapping: workflowMappingService,
+    characters: charactersService,
+    characterImages: characterImagesService,
+    comfyClient,
+    socket: comfySocket,
+    jobStore,
+    clientId: comfyConfig.clientId,
+  });
+
+  // Restart reconciliation: any job left queued/running belongs to a promptOwners entry
+  // that died with the previous process — without this, the persistent socket would never
+  // route future messages back to it again, leaving the UI stuck showing "running" forever.
+  // Fire-and-forget: shouldn't block the server from accepting requests while it runs.
+  executionService.reconcile().catch((err) => {
+    app.logger.error('Startup job reconciliation failed', err instanceof Error ? err : undefined);
+  });
 
   app.use('/uploads/templates', express.static(templatesService.uploadsDir));
 
   app.get('/', (_req, res) => res.redirect('/characters'));
-  app.use('/characters', createCharactersRouter(app, charactersService, templatesService));
+  app.use(
+    '/characters',
+    createCharactersRouter(
+      app,
+      charactersService,
+      templatesService,
+      characterImagesService,
+      executionService,
+      jobStore,
+    ),
+  );
   app.use('/templates', createTemplatesRouter(templatesService, charactersService));
-  app.use('/integration', createIntegrationRouter(app, workflowMappingService));
+  app.use('/integration', createIntegrationRouter(app, workflowMappingService, comfySocket));
 }
