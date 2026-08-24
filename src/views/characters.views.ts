@@ -225,6 +225,7 @@ export function createCharactersRouter(
       seed: startSeed + i,
       note: '',
       createdAt,
+      imagePath: '',
     }));
 
     characters.update(character.slug, {
@@ -563,7 +564,11 @@ function upsertImage(
   path: string,
   notes = '',
 ): CharacterRecord['images'] {
-  const existingNotes = images.find((image) => image.label === label)?.notes ?? notes;
+  const existing = images.find((image) => image.label === label);
+  const existingNotes = existing?.notes ?? notes;
   const withoutLabel = images.filter((image) => image.label !== label);
-  return [...withoutLabel, { label, path, notes: notes || existingNotes }];
+  return [
+    ...withoutLabel,
+    { label, path, maskPath: existing?.maskPath ?? '', notes: notes || existingNotes },
+  ];
 }

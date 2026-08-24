@@ -298,7 +298,7 @@ describe('defaultAuditRows', () => {
 
 describe('findImagePath', () => {
   it('returns the path for a matching label', () => {
-    const images = [{ label: 'Hero full-body', path: 'hero.png', notes: '' }];
+    const images = [{ label: 'Hero full-body', path: 'hero.png', maskPath: '', notes: '' }];
     expect(findImagePath(images, 'Hero full-body')).to.equal('hero.png');
   });
 
