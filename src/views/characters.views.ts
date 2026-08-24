@@ -1,10 +1,13 @@
-import { Router, Request, Response } from 'express';
+import path from 'node:path';
+import { Router, Request, Response, NextFunction } from 'express';
 import { Application } from '../types/application';
 import { CharactersService } from '../services/characters.service';
 import { TemplatesService } from '../services/templates.service';
+import { CharacterImagesService } from '../services/character-images.service';
 import { CharacterRecord } from '../schemas/character.schema';
 import { CharacterAttributesConfigSchema } from '../schemas/config.schema';
 import { NotFoundError, BadRequestError } from '../errors/http.errors';
+import { sanitizeSegment } from '../lib/path-sanitize';
 import { CHECKLIST_DEFINITIONS } from '../checklist/definitions';
 import { DEFAULT_ATTRIBUTE_SUGGESTIONS } from '../lib/character-attribute-defaults';
 import {
@@ -84,6 +87,7 @@ export function createCharactersRouter(
   app: Application,
   characters: CharactersService,
   templates: TemplatesService,
+  characterImages: CharacterImagesService,
 ): Router {
   const router = Router();
 
@@ -118,6 +122,58 @@ export function createCharactersRouter(
     characters.remove(param(req, 'slug'));
     res.redirect('/characters');
   });
+
+  // ---- Character image storage ----
+  //
+  // These serve files out of a character's own directory tree (working images/masks per
+  // phase binding, plus finalizedImages/), which also holds that character's <slug>.md and
+  // eventually a <slug>.safetensors — unlike templates.service.ts's isolated uploads/
+  // subdirectory, there's no single folder here that's safe to blanket-mount with
+  // express.static. Every route below is scoped to a specific subdirectory shape
+  // (/images/file/<phaseBindingKey>/<filename> or /images/finalized/<filename>), which
+  // structurally can never address the character's root-level .md/.safetensors files —
+  // those aren't reachable by any path this router accepts.
+  const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|webp)$/i;
+
+  router.get('/:slug/images', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    res.json(characterImages.listImages(character.slug));
+  });
+
+  router.get(
+    '/:slug/images/finalized/:filename',
+    (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const filename = sanitizeSegment(param(req, 'filename'));
+      if (!IMAGE_EXTENSION_PATTERN.test(filename)) throw new NotFoundError('Not an image file');
+
+      const filePath = characterImages.resolvePath(
+        character.slug,
+        path.join('finalizedImages', filename),
+      );
+      res.sendFile(filePath, (err) => {
+        if (err) next(new NotFoundError('Image not found'));
+      });
+    },
+  );
+
+  router.get(
+    '/:slug/images/file/:phaseBindingKey/:filename',
+    (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const phaseBindingKey = sanitizeSegment(param(req, 'phaseBindingKey'));
+      const filename = sanitizeSegment(param(req, 'filename'));
+      if (!IMAGE_EXTENSION_PATTERN.test(filename)) throw new NotFoundError('Not an image file');
+
+      const filePath = characterImages.resolvePath(
+        character.slug,
+        path.join(phaseBindingKey, filename),
+      );
+      res.sendFile(filePath, (err) => {
+        if (err) next(new NotFoundError('Image not found'));
+      });
+    },
+  );
 
   // ---- Spec builder ----
 

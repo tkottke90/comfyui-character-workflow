@@ -24,8 +24,19 @@ describe('characters.service', () => {
 
     expect(record.slug).to.equal('rin-takahashi');
     expect(record.status).to.equal('draft');
-    expect(fs.existsSync(path.join(dir, 'rin-takahashi.md'))).to.equal(true);
+    expect(
+      fs.existsSync(path.join(dir, 'rin-takahashi', 'rin-takahashi.md')),
+    ).to.equal(true);
     expect(record.negativePrompt).to.include('cartoon');
+  });
+
+  it('creates a finalizedImages subdirectory for a new character', () => {
+    const service = createCharactersService(dir);
+    service.create({ name: 'Rin Takahashi' });
+
+    expect(
+      fs.existsSync(path.join(dir, 'rin-takahashi', 'finalizedImages')),
+    ).to.equal(true);
   });
 
   it('round-trips through disk: what is created can be read back identically', () => {
@@ -123,5 +134,18 @@ describe('characters.service', () => {
     expect(service.remove('temp-character')).to.equal(true);
     expect(service.get('temp-character')).to.equal(undefined);
     expect(service.remove('temp-character')).to.equal(false);
+  });
+
+  it('removing a character recursively deletes its whole directory, not just the .md file', () => {
+    const service = createCharactersService(dir);
+    service.create({ name: 'Temp Character' });
+
+    const characterDir = path.join(dir, 'temp-character');
+    const workingFileDir = path.join(characterDir, 'refinement_cleanup');
+    fs.mkdirSync(workingFileDir, { recursive: true });
+    fs.writeFileSync(path.join(workingFileDir, '20260824120000-image.png'), 'fake-bytes');
+
+    expect(service.remove('temp-character')).to.equal(true);
+    expect(fs.existsSync(characterDir)).to.equal(false);
   });
 });

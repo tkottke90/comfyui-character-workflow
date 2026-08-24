@@ -3,6 +3,7 @@ import nunjucks from 'nunjucks';
 import express from 'express';
 import { Application } from '../types/application';
 import { createCharactersService } from '../services/characters.service';
+import { createCharacterImagesService } from '../services/character-images.service';
 import { createTemplatesService } from '../services/templates.service';
 import { createWorkflowMappingService } from '../services/workflow-mapping.service';
 import { createCharactersRouter } from './characters.views';
@@ -20,14 +21,19 @@ export function createViews(app: Application) {
     watch: true,
   });
 
-  const charactersService = createCharactersService(app.config.getConfigDir('characters'));
+  const charactersDir = app.config.getConfigDir('characters');
+  const charactersService = createCharactersService(charactersDir);
+  const characterImagesService = createCharacterImagesService(charactersDir);
   const templatesService = createTemplatesService(app.config.getConfigDir('templates'));
   const workflowMappingService = createWorkflowMappingService(app.config.getConfigDir('workflows'));
 
   app.use('/uploads/templates', express.static(templatesService.uploadsDir));
 
   app.get('/', (_req, res) => res.redirect('/characters'));
-  app.use('/characters', createCharactersRouter(app, charactersService, templatesService));
+  app.use(
+    '/characters',
+    createCharactersRouter(app, charactersService, templatesService, characterImagesService),
+  );
   app.use('/templates', createTemplatesRouter(templatesService, charactersService));
   app.use('/integration', createIntegrationRouter(app, workflowMappingService));
 }
