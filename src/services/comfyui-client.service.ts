@@ -63,6 +63,30 @@ export function getObjectInfoChoices(
 }
 
 /**
+ * Whether a given node class type + input name is flagged `image_upload: true` in
+ * ComfyUI's /object_info — the purpose-built signal ComfyUI itself uses to mark an
+ * input as wanting an uploaded file (e.g. LoadImage.image), as opposed to any other
+ * plain choice-list or scalar widget input. Used to restrict which node inputs the
+ * mapping editor offers the Current Image/Current Mask domain fields for.
+ */
+export function isImageUploadInput(
+  objectInfo: ObjectInfo,
+  classType: string,
+  inputName: string,
+): boolean {
+  const entry = objectInfo[classType];
+  const required = entry?.input?.required?.[inputName];
+  const optional = entry?.input?.optional?.[inputName];
+  const raw = required ?? optional;
+
+  if (!Array.isArray(raw)) return false;
+  const config = raw[1];
+  return Boolean(
+    config && typeof config === 'object' && (config as Record<string, unknown>).image_upload === true,
+  );
+}
+
+/**
  * Re-checks every 'static' mapping against a live /object_info snapshot, flagging
  * anything that no longer resolves (e.g. a LoRA that's been renamed or removed
  * from the server) as 'missing' instead of 'verified'. Inputs with no choice-list

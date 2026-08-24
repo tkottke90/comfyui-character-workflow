@@ -5,6 +5,16 @@ export interface DomainField {
 }
 
 /**
+ * The two domain-field paths that only make sense mapped onto a ComfyUI node input
+ * ComfyUI itself flags `image_upload: true` (e.g. LoadImage.image) — used by the mapping
+ * editor to hide them on every other kind of input, rather than offering them everywhere.
+ */
+export const IMAGE_DOMAIN_FIELD_PATHS = new Set([
+  'stage_input.current_image',
+  'stage_input.current_mask',
+]);
+
+/**
  * Mappable "Domain field" sources for the workflow mapping editor.
  *
  * The "character.*" entries mirror the scalar fields captured in a character's

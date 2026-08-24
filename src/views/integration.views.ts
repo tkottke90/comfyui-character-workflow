@@ -4,6 +4,7 @@ import { ComfyUiConfigSchema } from '../schemas/config.schema';
 import {
   createComfyUIClient,
   getObjectInfoChoices,
+  isImageUploadInput,
   ObjectInfo,
   verifyStaticMappings,
 } from '../services/comfyui-client.service';
@@ -21,7 +22,7 @@ import {
   slugifySlotId,
   WORKFLOW_SLOTS,
 } from '../comfy/workflow-registry';
-import { DOMAIN_FIELDS } from '../comfy/domain-fields';
+import { DOMAIN_FIELDS, IMAGE_DOMAIN_FIELD_PATHS } from '../comfy/domain-fields';
 import {
   activeVersion,
   candidateOutputNodes,
@@ -35,7 +36,12 @@ import {
 } from '../lib/workflow-mapping-logic';
 import { NodeMapping, WorkflowMappingRecord } from '../schemas/workflow-mapping.schema';
 
-const SOURCE_TYPES = ['unset', 'domain', 'computed', 'static'] as const;
+// 'computed' is deferred — its resolution semantics (a substitution DSL, and what
+// non-character invocation context it would even draw from) are their own scope.
+// The Zod enum backing NodeMapping.sourceType still allows it (so old/future data
+// can't fail to parse), but this route-level allowlist is what actually keeps the
+// editor and the execution engine from being handed a source type nothing resolves.
+const SOURCE_TYPES = ['unset', 'domain', 'static'] as const;
 
 const MODEL_GROUPS: Array<{
   title: string;
@@ -233,11 +239,21 @@ export function createIntegrationRouter(
 
     let editingNode: NodeMapping | undefined;
     let editingOptions: string[] = [];
+    let editingDomainFields = DOMAIN_FIELDS;
     if (editingKey && version) {
       const [nodeId, inputName] = editingKey.split(':');
       editingNode = version.nodes.find((n) => n.nodeId === nodeId && n.inputName === inputName);
       if (editingNode) {
         editingOptions = getObjectInfoChoices(objectInfo, editingNode.classType, editingNode.inputName);
+
+        // Current Image/Current Mask only ever make sense on an input ComfyUI itself
+        // flags as wanting an uploaded file — hide them everywhere else rather than
+        // let them be mapped onto e.g. a seed or a checkpoint name.
+        if (!isImageUploadInput(objectInfo, editingNode.classType, editingNode.inputName)) {
+          editingDomainFields = DOMAIN_FIELDS.filter(
+            (field) => !IMAGE_DOMAIN_FIELD_PATHS.has(field.path),
+          );
+        }
       }
     }
 
@@ -257,7 +273,7 @@ export function createIntegrationRouter(
       editingNode,
       editingOptions,
       comfyUnreachable,
-      domainFields: DOMAIN_FIELDS,
+      domainFields: editingDomainFields,
       phaseBindings: phaseBindingRows(allRecords),
       allRecords,
       progress: requiredSlotProgress(allRecords),

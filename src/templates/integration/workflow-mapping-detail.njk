@@ -146,11 +146,10 @@
                   <select name="sourceType" class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px] font-mono mb-3">
                     <option value="unset" {{ 'selected' if node.sourceType == 'unset' }}>Unset</option>
                     <option value="domain" {{ 'selected' if node.sourceType == 'domain' }}>Domain field</option>
-                    <option value="computed" {{ 'selected' if node.sourceType == 'computed' }}>Computed</option>
                     <option value="static" {{ 'selected' if node.sourceType == 'static' }}>Static value</option>
                   </select>
 
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                     <div>
                       <label class="block text-[11px] font-semibold text-steel-500 mb-1">If Domain field →</label>
                       <select name="domainValue" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px] font-mono">
@@ -159,12 +158,6 @@
                           <option value="{{ field.path }}" {{ 'selected' if node.sourceType == 'domain' and node.sourceValue == field.path }}>{{ field.label }}</option>
                         {% endfor %}
                       </select>
-                    </div>
-                    <div>
-                      <label class="block text-[11px] font-semibold text-steel-500 mb-1">If Computed →</label>
-                      <input name="computedValue" type="text" placeholder="e.g. identity_block + view clause"
-                        value="{{ node.sourceValue if node.sourceType == 'computed' else '' }}"
-                        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px]" />
                     </div>
                     <div>
                       <label class="block text-[11px] font-semibold text-steel-500 mb-1">If Static value →</label>
