@@ -1,5 +1,10 @@
 import { expect } from 'chai';
-import { AttributesSchema, CharacterSchema } from '../src/schemas/character.schema';
+import {
+  AttributesSchema,
+  CastingCandidateSchema,
+  CharacterSchema,
+  ImageAssetSchema,
+} from '../src/schemas/character.schema';
 import { emptyChecklist, CHECKLIST_DEFINITIONS } from '../src/checklist/definitions';
 import {
   compileIdentityBlock,
@@ -299,5 +304,33 @@ describe('findImagePath', () => {
 
   it('returns an empty string when no image has that label', () => {
     expect(findImagePath([], 'Hero full-body')).to.equal('');
+  });
+});
+
+describe('ImageAssetSchema', () => {
+  it('defaults maskPath to an empty string', () => {
+    expect(ImageAssetSchema.parse({ label: 'Hero full-body' }).maskPath).to.equal('');
+  });
+
+  it('accepts an explicit maskPath', () => {
+    expect(
+      ImageAssetSchema.parse({ label: 'Hero full-body', maskPath: 'mask.png' }).maskPath,
+    ).to.equal('mask.png');
+  });
+});
+
+describe('CastingCandidateSchema', () => {
+  it('defaults imagePath to an empty string', () => {
+    const candidate = CastingCandidateSchema.parse({ seed: 42, createdAt: '2026-08-24' });
+    expect(candidate.imagePath).to.equal('');
+  });
+
+  it('accepts an explicit imagePath', () => {
+    const candidate = CastingCandidateSchema.parse({
+      seed: 42,
+      createdAt: '2026-08-24',
+      imagePath: 'seed-42.png',
+    });
+    expect(candidate.imagePath).to.equal('seed-42.png');
   });
 });

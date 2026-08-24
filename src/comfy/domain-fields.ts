@@ -22,7 +22,15 @@ export interface DomainField {
  */
 export const DOMAIN_FIELDS: DomainField[] = [
   // Stage inputs — supplied at invocation time, not stored on the character.
-  { path: 'uploaded_image.hero', label: 'Hero image (uploaded/current)', kind: 'stage-input' },
+  //
+  // current_image/current_mask are special-cased by the execution engine's mapping
+  // resolver: they don't resolve via a path lookup against the character record like
+  // every other entry here. They resolve against phase-binding-keyed storage — "whichever
+  // phase binding this workflow version is bound to" (WorkflowVersion.boundPhaseSlotId) —
+  // so the same two fields work for every image-consuming phase without one dropdown entry
+  // per phase binding.
+  { path: 'stage_input.current_image', label: 'Current image', kind: 'stage-input' },
+  { path: 'stage_input.current_mask', label: 'Current mask', kind: 'stage-input' },
   { path: 'stage_input.horizontal_angle', label: 'Horizontal angle', kind: 'stage-input' },
   { path: 'stage_input.vertical_angle', label: 'Vertical angle', kind: 'stage-input' },
   { path: 'stage_input.zoom', label: 'Zoom', kind: 'stage-input' },

@@ -36,6 +36,7 @@ export const CastingCandidateSchema = z.object({
   seed: z.number(),
   note: z.string().default(''),
   createdAt: z.string(),
+  imagePath: z.string().default(''),
 });
 export type CastingCandidate = z.infer<typeof CastingCandidateSchema>;
 
@@ -88,6 +89,7 @@ export type Polish = z.infer<typeof PolishSchema>;
 export const ImageAssetSchema = z.object({
   label: z.string(),
   path: z.string().default(''),
+  maskPath: z.string().default(''),
   notes: z.string().default(''),
 });
 export type ImageAsset = z.infer<typeof ImageAssetSchema>;
