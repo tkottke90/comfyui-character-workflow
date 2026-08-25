@@ -10,9 +10,39 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
     <div>
-      <div class="aspect-[2/3] max-h-[520px] placeholder-photo rounded-lg flex items-end justify-center p-3">
-        {% if character.locked_seed %}{{ ui.mono('seed ' + character.locked_seed + ' · locked') }}{% endif %}
+      <div data-sse-events="/characters/{{ character.slug }}/events/{{ phaseBindingKey }}"
+        class="aspect-[2/3] max-h-[520px] rounded-lg border border-apple-300 relative overflow-hidden">
+        {% if job and job.kind == 'single' and job.status == 'done' and job.resultPath %}
+          <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
+        {% else %}
+          <div class="placeholder-photo absolute inset-0 flex items-end justify-center p-3">
+            {% if character.locked_seed %}{{ ui.mono('seed ' + character.locked_seed + ' · locked') }}{% endif %}
+          </div>
+        {% endif %}
+        <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[12px] px-2 py-1" data-sse-status></div>
+        <progress data-sse-progress class="hidden w-full h-1" max="100" value="0"></progress>
       </div>
+
+      {% if job and job.kind == 'single' and job.status == 'error' and job.error %}
+        <div class="mt-2 rounded-md border border-rose-300 bg-rose-50 dark:bg-rose-950 dark:border-rose-800 px-3 py-2 text-[12.5px] text-rose-800 dark:text-rose-300">
+          {% if job.error.kind == 'connection' %}
+            Lost the connection to ComfyUI mid-run: {{ job.error.message }}
+            <a href="/integration/connection" class="block mt-1 font-semibold underline">Check Connection →</a>
+          {% else %}
+            {{ job.error.message }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <form method="post" action="/characters/{{ character.slug }}/run/{{ phaseBindingKey }}" class="mt-3 flex items-end gap-3">
+        <div>
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="castingSeed">Seed (fixed for pre-flight)</label>
+          <input id="castingSeed" name="castingSeed" type="number" required
+            class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono w-40" />
+        </div>
+        {{ ui.button('Running…' if jobActive else 'Run Pre-flight', 'primary', 'submit', jobActive) }}
+      </form>
+      <p class="text-[12px] text-steel-500 mt-1">Re-run on the same seed after each fix — only noise (the seed) should vary once you move to the batch.</p>
     </div>
 
     <form method="post" action="/characters/{{ character.slug }}/casting/preflight">
