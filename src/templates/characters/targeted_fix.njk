@@ -53,7 +53,7 @@
 
     <div>
       <div class="text-[11.5px] font-bold uppercase tracking-wider text-apple-700 dark:text-apple-300 mb-2">Output preview</div>
-      <div data-sse-events="/characters/{{ character.slug }}/events/{{ phaseBindingKey }}" class="aspect-[3/4] rounded-lg border border-apple-300 relative overflow-hidden">
+      <div data-sse-events="/characters/{{ character.slug }}/events/{{ phaseBindingKey }}" data-initial-status="{{ job.status if job else '' }}" class="aspect-[3/4] rounded-lg border border-apple-300 relative overflow-hidden">
         {% if job and job.kind == 'single' and job.status == 'done' and job.resultPath %}
           <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
         {% else %}

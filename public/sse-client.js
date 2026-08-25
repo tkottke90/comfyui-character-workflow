@@ -74,6 +74,15 @@
     var statusEl = root.querySelector('[data-sse-status]');
     var progressEl = root.querySelector('[data-sse-progress]');
 
+    // The page's initial server-render already reflects whatever job state existed at
+    // request time (see the events route's "emit current state immediately" comment). If
+    // the first SSE message reports the very same terminal status, the page already shows
+    // it — reloading would just re-fetch the same 'done'/'error' state and reconnect,
+    // triggering the same message again forever. Only reload when the status differs from
+    // what was rendered (a fresh completion) or on any later message (a real transition).
+    var initialStatus = root.getAttribute('data-initial-status') || '';
+    var sawFirstMessage = false;
+
     var setStatus = function (text) {
       if (statusEl) statusEl.textContent = text;
     };
@@ -81,6 +90,8 @@
     var source = new EventSource(url);
 
     source.onmessage = function (event) {
+      var isFirstMessage = !sawFirstMessage;
+      sawFirstMessage = true;
       var job;
       try {
         job = JSON.parse(event.data);
@@ -126,7 +137,7 @@
 
       if (job.status === 'done' || job.status === 'error') {
         source.close();
-        location.reload();
+        if (!isFirstMessage || job.status !== initialStatus) location.reload();
       }
     };
 
