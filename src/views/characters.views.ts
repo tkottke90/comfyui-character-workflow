@@ -330,10 +330,20 @@ export function createCharactersRouter(
         return;
       }
 
+      // Only a few phase bindings (e.g. casting_preflight) submit a fixed seed — most
+      // pages never send this field, in which case it stays undefined and buildGraph's
+      // stage_input.casting_seed mapping (if the run doesn't use it) is never consulted.
+      let castingSeed: number | undefined;
+      if (req.body.castingSeed !== undefined && req.body.castingSeed !== '') {
+        castingSeed = Number(req.body.castingSeed);
+        if (!Number.isFinite(castingSeed)) throw new BadRequestError('Seed must be numeric');
+      }
+
       try {
         await executionService.submitSingle(character.slug, phaseBindingKey, {
           customPositivePrompt: String(req.body.customPositivePrompt ?? ''),
           customNegativePrompt: String(req.body.customNegativePrompt ?? ''),
+          castingSeed,
         });
       } catch (err) {
         next(err);
@@ -449,10 +459,15 @@ export function createCharactersRouter(
 
   router.get('/:slug/casting/preflight', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = 'casting_preflight';
+    const job = jobStore.get(character.slug, phaseBindingKey);
     res.render('characters/casting_preflight.njk', {
       ...baseContext(character),
       items: CHECKLIST_DEFINITIONS.preflight,
       heroPath: findImagePath(character.images, 'Hero full-body'),
+      phaseBindingKey,
+      job: job ?? null,
+      jobActive: isJobActive(job),
     });
   });
 

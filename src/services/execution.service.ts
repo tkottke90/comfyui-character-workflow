@@ -43,6 +43,10 @@ export interface SubmitBatchResult {
 export interface PromptOverrides {
   customPositivePrompt?: string;
   customNegativePrompt?: string;
+  /** Fixed seed for a single run (e.g. casting_preflight) whose mapping resolves
+   *  stage_input.casting_seed — the same domain field submitCastingBatch resolves
+   *  per-candidate, just supplied once here instead of per-seed. */
+  castingSeed?: number;
 }
 
 export interface ExecutionService {
@@ -395,6 +399,7 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     const graph = await buildGraph(slotId, version, character, phaseBindingKey, {
       customPositivePrompt: promptOverrides?.customPositivePrompt,
       customNegativePrompt: promptOverrides?.customNegativePrompt,
+      castingSeed: promptOverrides?.castingSeed,
     });
     const { promptId } = await comfyClient.submitPrompt(graph, clientId);
     promptOwners.set(promptId, { characterSlug, phaseBindingKey });
