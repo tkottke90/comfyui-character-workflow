@@ -136,6 +136,7 @@ export const CharacterSchema = z.object({
   scheduler: z.string().default('karras'),
   steps: z.number().default(28),
   cfg: z.number().default(5),
+  styleSourceName: z.string().default(''),
   resolution: z.string().default('832x1216'),
   body_template: z.string().default(''),
   cn_strength: z.number().default(0.5),

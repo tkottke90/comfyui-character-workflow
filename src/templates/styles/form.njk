@@ -1,0 +1,80 @@
+{% extends "layout.njk" %}
+{% set section = "styles" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Styles', href: '/styles'}, {label: style.name if style else 'Add Style'}]) }}
+  <h1 class="text-xl font-black tracking-tight mb-5">{{ 'Edit Style' if style else 'Add Style' }}</h1>
+
+  {% if syncError %}
+    <p class="text-[12.5px] text-rose-700 dark:text-rose-300 mb-5">
+      Could not reach ComfyUI: {{ syncError }} — checkpoint/sampler/scheduler dropdowns may be empty.
+    </p>
+  {% endif %}
+
+  <form method="post" action="{{ '/styles/' + style.slug if style else '/styles' }}" class="max-w-lg">
+    {% call ui.card() %}
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="name">Name</label>
+      <input id="name" name="name" type="text" required value="{{ style.name if style else '' }}"
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4" />
+
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="description">Description</label>
+      <input id="description" name="description" type="text" value="{{ style.description if style else '' }}"
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4" />
+
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="artStyle">Art style</label>
+      <input id="artStyle" name="artStyle" type="text" placeholder="e.g. photorealistic, anime" value="{{ style.artStyle if style else '' }}"
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4" />
+
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="checkpoint">Checkpoint</label>
+      <select id="checkpoint" name="checkpoint" required
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4">
+        <option value="">— select —</option>
+        {% for c in checkpoints %}
+          <option value="{{ c }}" {% if style and style.checkpoint == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="sampler">Sampler</label>
+      <select id="sampler" name="sampler" required
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4">
+        <option value="">— select —</option>
+        {% for s in samplers %}
+          <option value="{{ s }}" {% if style and style.sampler == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="scheduler">Scheduler</label>
+      <select id="scheduler" name="scheduler" required
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4">
+        <option value="">— select —</option>
+        {% for s in schedulers %}
+          <option value="{{ s }}" {% if style and style.scheduler == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="grid grid-cols-2 gap-4 mb-2">
+        <div>
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="steps">Steps</label>
+          <input id="steps" name="steps" type="number" min="1" max="100" required value="{{ style.steps if style else 28 }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px]" />
+        </div>
+        <div>
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="cfg">CFG</label>
+          <input id="cfg" name="cfg" type="number" min="1" max="20" step="0.5" required value="{{ style.cfg if style else 5 }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px]" />
+        </div>
+      </div>
+    {% endcall %}
+
+    <div class="mt-4">
+      {{ ui.button('Save Style') }}
+    </div>
+  </form>
+
+  {% if style %}
+    <form method="post" action="/styles/{{ style.slug }}/delete" class="max-w-lg mt-4"
+      onsubmit="return confirm('Remove {{ style.name }}? Characters that already used it keep their copied values.');">
+      {{ ui.button('Remove style', 'danger') }}
+    </form>
+  {% endif %}
+{% endblock %}

@@ -6,6 +6,7 @@ import { ComfyUiConfigSchema } from '../schemas/config.schema';
 import { createCharactersService } from '../services/characters.service';
 import { createCharacterImagesService } from '../services/character-images.service';
 import { createTemplatesService } from '../services/templates.service';
+import { createStylesService } from '../services/styles.service';
 import { createWorkflowMappingService } from '../services/workflow-mapping.service';
 import { createComfyUIClient } from '../services/comfyui-client.service';
 import { createComfyUISocket } from '../services/comfyui-socket.service';
@@ -13,6 +14,7 @@ import { createJobStore } from '../services/job-store.service';
 import { createExecutionService } from '../services/execution.service';
 import { createCharactersRouter } from './characters.views';
 import { createTemplatesRouter } from './templates.views';
+import { createStylesRouter } from './styles.views';
 import { createIntegrationRouter } from './integration.views';
 
 export function createViews(app: Application) {
@@ -30,6 +32,7 @@ export function createViews(app: Application) {
   const charactersService = createCharactersService(charactersDir);
   const characterImagesService = createCharacterImagesService(charactersDir);
   const templatesService = createTemplatesService(app.config.getConfigDir('templates'));
+  const stylesService = createStylesService(app.config.getConfigDir('styles'));
   const workflowMappingService = createWorkflowMappingService(app.config.getConfigDir('workflows'));
 
   // Execution engine wiring — one shared ComfyUI client + one persistent socket
@@ -78,11 +81,13 @@ export function createViews(app: Application) {
       app,
       charactersService,
       templatesService,
+      stylesService,
       characterImagesService,
       executionService,
       jobStore,
     ),
   );
   app.use('/templates', createTemplatesRouter(templatesService, charactersService));
+  app.use('/styles', createStylesRouter(app, stylesService));
   app.use('/integration', createIntegrationRouter(app, workflowMappingService, comfySocket));
 }

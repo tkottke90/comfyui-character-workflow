@@ -17,6 +17,8 @@ const OBJECT_INFO: ObjectInfo = {
     input: {
       required: {
         seed: ['INT', { default: 0, min: 0, max: 999999 }],
+        sampler_name: [['euler', 'dpmpp_2m', 'dpmpp_sde'], {}],
+        scheduler: [['normal', 'karras', 'exponential'], {}],
       },
     },
   },
@@ -62,5 +64,21 @@ describe('getObjectInfoChoices', () => {
 
   it('returns an empty array for an unknown node', () => {
     expect(getObjectInfoChoices(OBJECT_INFO, 'Nonexistent', 'image')).to.deep.equal([]);
+  });
+
+  it('returns sampler choices for KSampler.sampler_name', () => {
+    expect(getObjectInfoChoices(OBJECT_INFO, 'KSampler', 'sampler_name')).to.have.members([
+      'euler',
+      'dpmpp_2m',
+      'dpmpp_sde',
+    ]);
+  });
+
+  it('returns scheduler choices for KSampler.scheduler', () => {
+    expect(getObjectInfoChoices(OBJECT_INFO, 'KSampler', 'scheduler')).to.have.members([
+      'normal',
+      'karras',
+      'exponential',
+    ]);
   });
 });

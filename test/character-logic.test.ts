@@ -7,6 +7,7 @@ import {
 } from '../src/schemas/character.schema';
 import { emptyChecklist, CHECKLIST_DEFINITIONS } from '../src/checklist/definitions';
 import {
+  applyStyleToCharacter,
   compileIdentityBlock,
   defaultAuditRows,
   deriveChecklist,
@@ -20,6 +21,7 @@ import {
   slugify,
   DEFAULT_NEGATIVE_PROMPT,
 } from '../src/lib/character-logic';
+import { StyleSchema } from '../src/schemas/style.schema';
 
 describe('slugify', () => {
   it('lowercases and dashes a name', () => {
@@ -346,6 +348,31 @@ describe('findImagePath', () => {
 
   it('returns an empty string when no image has that label', () => {
     expect(findImagePath([], 'Hero full-body')).to.equal('');
+  });
+});
+
+describe('applyStyleToCharacter', () => {
+  it('maps a style record onto the character overlay fields', () => {
+    const style = StyleSchema.parse({
+      name: 'Cinematic Portrait',
+      artStyle: 'cinematic',
+      checkpoint: 'RealVisXL_V5.0',
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      cfg: 6,
+      steps: 30,
+      createdAt: '2026-08-25',
+    });
+
+    expect(applyStyleToCharacter({ slug: 'cinematic-portrait', ...style })).to.deep.equal({
+      style: 'cinematic',
+      checkpoint: 'RealVisXL_V5.0',
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      cfg: 6,
+      steps: 30,
+      styleSourceName: 'Cinematic Portrait',
+    });
   });
 });
 

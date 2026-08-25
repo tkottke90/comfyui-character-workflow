@@ -50,6 +50,34 @@
           {% endfor %}
         </select>
 
+        <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="styleSlug">Style</label>
+        <select id="styleSlug" name="styleSlug"
+          class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-2"
+          {% if styles.length == 0 %}disabled{% endif %}>
+          {% if styles.length == 0 %}
+            <option value="" disabled selected>No Styles Available</option>
+          {% else %}
+            <option value="">— none, keep current values —</option>
+            {% for s in styles %}
+              <option value="{{ s.slug }}">{{ s.name }}</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+        <p class="text-[12px] text-steel-500 mb-2">
+          Selecting a style copies its checkpoint/sampler/scheduler/cfg/steps/art-style onto this character on save.
+          Manage styles from the <a href="/styles" class="underline">Styles</a> page.
+        </p>
+
+        <div class="rounded-md border border-steel-200 dark:border-steel-700 bg-steel-50 dark:bg-steel-800/50 px-3 py-2.5 text-[13px] mb-5">
+          <div class="font-semibold text-steel-600 dark:text-steel-300 mb-1">
+            Current generation settings
+            {% if character.styleSourceName %}<span class="font-normal text-steel-400">(from: {{ character.styleSourceName }})</span>{% endif %}
+          </div>
+          <div class="font-mono text-steel-600 dark:text-steel-300">
+            {{ character.checkpoint }} · {{ character.sampler }} · {{ character.scheduler }} · {{ character.steps }} steps · cfg {{ character.cfg }}{% if character.style %} · {{ character.style }}{% endif %}
+          </div>
+        </div>
+
         <label class="flex items-center gap-2.5 mb-5">
           <input type="checkbox" name="useNameAsToken" data-use-name-token {% if character.useNameAsToken %}checked{% endif %} class="h-4 w-4 rounded accent-apple-600" />
           <span class="text-[14px]">
