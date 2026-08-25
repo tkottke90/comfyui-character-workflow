@@ -13,6 +13,7 @@ import { WorkflowVersion } from '../schemas/workflow-mapping.schema';
 import { ComfyUIClient } from './comfyui-client.service';
 import { ComfyUISocket } from './comfyui-socket.service';
 import { BatchSubJob, JobError, JobStore, SingleJobRecord } from './job-store.service';
+import { PhasePromptConfig } from '../schemas/config.schema';
 
 interface RawComfyNode {
   class_type?: string;
@@ -30,6 +31,9 @@ export interface ExecutionServiceConfig {
   jobStore: JobStore;
   /** Must match the persistent socket's own client_id — see the module doc comment. */
   clientId: string;
+  /** Per-phase positive-prompt prefix/suffix, keyed by phaseBindingKey — see config.schema.ts.
+   *  Defaults to {} (no wrapping) when omitted. */
+  phasePromptConfig?: PhasePromptConfig;
 }
 
 export interface SubmitResult {
@@ -88,9 +92,26 @@ function slotIdForPhaseBinding(phaseBindingKey: string): string {
  * id, so this deliberately reuses one shared, configured clientId for both rather
  * than generating a fresh one per submission.
  */
+/** Domain fields treated as "the positive prompt" for phase-config prefix/suffix wrapping —
+ *  see PhasePromptConfigSchema. Anything else (negative prompt, checkpoint, sampler params,
+ *  seeds, etc.) is left untouched. */
+const POSITIVE_PROMPT_SOURCE_VALUES = new Set([
+  'character.identityBlock',
+  'character.identityBlockFrozen',
+  'stage_input.custom_positive_prompt',
+]);
+
 export function createExecutionService(config: ExecutionServiceConfig): ExecutionService {
-  const { workflowMapping, characters, characterImages, comfyClient, socket, jobStore, clientId } =
-    config;
+  const {
+    workflowMapping,
+    characters,
+    characterImages,
+    comfyClient,
+    socket,
+    jobStore,
+    clientId,
+    phasePromptConfig = {},
+  } = config;
 
   // prompt_id -> which (character, phase-binding[, seed]) job/sub-job to update when a
   // socket message arrives for it. `seed` present means it's a casting-batch sub-job.
@@ -381,7 +402,21 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
         // (an existing characteristic of NodeMapping.sourceValue, not something new
         // introduced here) — a widget input ComfyUI expects as a number/boolean will
         // still be spliced in as a string.
-        node.inputs[mapping.inputName] = mapping.resolved.value;
+        let value = mapping.resolved.value;
+
+        // Phase-configured positive-prompt prefix/suffix (config.schema.ts's 'phase-prompt'
+        // section) — plain concatenation, no auto-inserted separator, so the config string
+        // carries its own leading/trailing punctuation. Applies even to an empty
+        // custom_positive_prompt (a legitimate "no override this run" value) so a phase's
+        // suffix (e.g. an image-edit "keep the same character" instruction) always lands.
+        if (POSITIVE_PROMPT_SOURCE_VALUES.has(mapping.sourceValue)) {
+          const phrasing = phasePromptConfig[phaseBindingKey];
+          if (phrasing) {
+            value = `${phrasing.prefix}${value}${phrasing.suffix}`;
+          }
+        }
+
+        node.inputs[mapping.inputName] = value;
       }
     }
 

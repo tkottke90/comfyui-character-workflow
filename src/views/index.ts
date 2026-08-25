@@ -2,7 +2,7 @@ import path from 'node:path';
 import nunjucks from 'nunjucks';
 import express from 'express';
 import { Application } from '../types/application';
-import { ComfyUiConfigSchema } from '../schemas/config.schema';
+import { ComfyUiConfigSchema, PhasePromptConfigSchema } from '../schemas/config.schema';
 import { createCharactersService } from '../services/characters.service';
 import { createCharacterImagesService } from '../services/character-images.service';
 import { createTemplatesService } from '../services/templates.service';
@@ -54,6 +54,7 @@ export function createViews(app: Application) {
   comfySocket.connect();
 
   const jobStore = createJobStore(app.config.getConfigDir('jobs'));
+  const phasePromptConfig = app.config.loadConfig('phase-prompt', PhasePromptConfigSchema);
   const executionService = createExecutionService({
     workflowMapping: workflowMappingService,
     characters: charactersService,
@@ -62,6 +63,7 @@ export function createViews(app: Application) {
     socket: comfySocket,
     jobStore,
     clientId: comfyConfig.clientId,
+    phasePromptConfig,
   });
 
   // Restart reconciliation: any job left queued/running belongs to a promptOwners entry

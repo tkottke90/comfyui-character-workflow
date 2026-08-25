@@ -386,6 +386,91 @@ describe('execution.service', () => {
     }
   });
 
+  it('wraps the positive prompt in the configured phase prefix/suffix, leaving the negative prompt untouched', async () => {
+    const charactersDir = path.join(dir, 'characters');
+    const characters = createCharactersService(charactersDir);
+    const character = characters.create({ name: 'Rin Takahashi', checkpoint: 'RealVisXL_V5.0' });
+
+    const characterImages = createCharacterImagesService(charactersDir);
+    characterImages.storeWorkingFile(character.slug, 'refinement_cleanup', 'image', ONE_PIXEL_PNG_DATA_URL);
+
+    const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
+    const graph = {
+      '1': { class_type: 'LoadImage', inputs: { image: 'placeholder.png' }, _meta: { title: 'Load Image' } },
+      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'placeholder positive' }, _meta: { title: 'Positive' } },
+      '3': { class_type: 'CLIPTextEncode', inputs: { text: 'placeholder negative' }, _meta: { title: 'Negative' } },
+      '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+    };
+    const { version } = workflowMapping.importVersion(graph, 'cleanup.json', '003-Cleanup');
+    workflowMapping.updateNodeMapping('003-Cleanup', version, '1', 'image', {
+      sourceType: 'domain',
+      sourceValue: 'stage_input.current_image',
+      status: 'mapped',
+    });
+    workflowMapping.updateNodeMapping('003-Cleanup', version, '2', 'text', {
+      sourceType: 'domain',
+      sourceValue: 'stage_input.custom_positive_prompt',
+      status: 'mapped',
+    });
+    workflowMapping.updateNodeMapping('003-Cleanup', version, '3', 'text', {
+      sourceType: 'domain',
+      sourceValue: 'stage_input.custom_negative_prompt',
+      status: 'mapped',
+    });
+    workflowMapping.bindPhase('003-Cleanup', version, '003-Cleanup');
+    workflowMapping.setResultOutput('003-Cleanup', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+    workflowMapping.activateVersion('003-Cleanup', version);
+
+    let submittedGraph: Record<string, { inputs?: Record<string, unknown> }> | undefined;
+    const httpStub = await startStubComfyServer({
+      promptId: 'prompt-ghi',
+      onUpload: () => {},
+      onPrompt: (graph) => {
+        submittedGraph = graph as typeof submittedGraph;
+      },
+    });
+    const wsStub = await startStubWsServer();
+
+    const jobStore = createJobStore(path.join(dir, 'jobs'));
+    const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
+    const socket = createComfyUISocket({
+      baseUrl: `http://127.0.0.1:${wsStub.port}`,
+      clientId: 'app-client',
+    });
+
+    try {
+      const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
+      socket.connect();
+      await opened;
+
+      const executionService = createExecutionService({
+        workflowMapping,
+        characters,
+        characterImages,
+        comfyClient,
+        socket,
+        jobStore,
+        clientId: 'app-client',
+        phasePromptConfig: {
+          refinement_cleanup: { prefix: '', suffix: ', plain white background, studio lighting' },
+        },
+      });
+
+      // Deliberately omits customPositivePrompt/customNegativePrompt, exercising the
+      // "blank custom prompt is still a legitimate value" path — the suffix must land even
+      // when the per-run override is empty.
+      await executionService.submitSingle(character.slug, 'refinement_cleanup');
+
+      expect(submittedGraph?.['2'].inputs?.text).to.equal(', plain white background, studio lighting');
+      expect(submittedGraph?.['3'].inputs?.text).to.equal('');
+    } finally {
+      socket.close();
+      await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
+      await httpStub.close();
+      await jobStore.close();
+    }
+  });
+
   it('marks the job as an execution error on execution_error, carrying the failing node id and message', async () => {
     const charactersDir = path.join(dir, 'characters');
     const characters = createCharactersService(charactersDir);

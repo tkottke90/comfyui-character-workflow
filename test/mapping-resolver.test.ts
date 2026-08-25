@@ -67,7 +67,13 @@ describe('resolveMapping', () => {
 
     const resolved = resolveMapping(version, characterRecord, characterImages);
     expect(resolved).to.deep.equal([
-      { nodeId: '1', inputName: 'denoise', classType: 'SomeNode', resolved: { kind: 'literal', value: '0.35' } },
+      {
+        nodeId: '1',
+        inputName: 'denoise',
+        classType: 'SomeNode',
+        sourceValue: '0.35',
+        resolved: { kind: 'literal', value: '0.35' },
+      },
     ]);
   });
 
