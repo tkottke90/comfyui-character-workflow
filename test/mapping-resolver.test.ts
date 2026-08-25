@@ -129,6 +129,60 @@ describe('resolveMapping', () => {
     });
   });
 
+  describe('stage_input.custom_positive_prompt / stage_input.custom_negative_prompt', () => {
+    it('resolves to an empty-string literal when not supplied in the resolution context', () => {
+      const characterImages = createCharacterImagesService(dir);
+      const version = makeVersion(
+        [node({ sourceType: 'domain', sourceValue: 'stage_input.custom_positive_prompt' })],
+        null,
+      );
+      const resolved = resolveMapping(version, characterRecord, characterImages);
+      expect(resolved[0].resolved).to.deep.equal({ kind: 'literal', value: '' });
+    });
+
+    it('resolves to the supplied text as a literal', () => {
+      const characterImages = createCharacterImagesService(dir);
+      const version = makeVersion(
+        [node({ sourceType: 'domain', sourceValue: 'stage_input.custom_positive_prompt' })],
+        null,
+      );
+      const resolved = resolveMapping(version, characterRecord, characterImages, {
+        customPositivePrompt: 'a glowing rune on the wall',
+      });
+      expect(resolved[0].resolved).to.deep.equal({
+        kind: 'literal',
+        value: 'a glowing rune on the wall',
+      });
+    });
+
+    it('resolves positive and negative overrides independently in the same mapping', () => {
+      const characterImages = createCharacterImagesService(dir);
+      const version = makeVersion(
+        [
+          node({
+            nodeId: '1',
+            inputName: 'text',
+            sourceType: 'domain',
+            sourceValue: 'stage_input.custom_positive_prompt',
+          }),
+          node({
+            nodeId: '2',
+            inputName: 'text',
+            sourceType: 'domain',
+            sourceValue: 'stage_input.custom_negative_prompt',
+          }),
+        ],
+        null,
+      );
+      const resolved = resolveMapping(version, characterRecord, characterImages, {
+        customPositivePrompt: 'add a candle',
+        customNegativePrompt: 'no extra hands',
+      });
+      expect(resolved[0].resolved).to.deep.equal({ kind: 'literal', value: 'add a candle' });
+      expect(resolved[1].resolved).to.deep.equal({ kind: 'literal', value: 'no extra hands' });
+    });
+  });
+
   it('throws for an unsupported stage_input field other than current_image/current_mask', () => {
     const characterImages = createCharacterImagesService(dir);
     const version = makeVersion(

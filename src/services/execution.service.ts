@@ -40,8 +40,17 @@ export interface SubmitBatchResult {
   promptIds: string[];
 }
 
+export interface PromptOverrides {
+  customPositivePrompt?: string;
+  customNegativePrompt?: string;
+}
+
 export interface ExecutionService {
-  submitSingle(characterSlug: string, phaseBindingKey: string): Promise<SubmitResult>;
+  submitSingle(
+    characterSlug: string,
+    phaseBindingKey: string,
+    promptOverrides?: PromptOverrides,
+  ): Promise<SubmitResult>;
   /** N independent /prompt submissions (startSeed + i), never one batched EmptyLatentImage
    *  call — see design doc §6. Always targets the 'casting_batch' phase binding. */
   submitCastingBatch(characterSlug: string, startSeed: number, count: number): Promise<SubmitBatchResult>;
@@ -375,11 +384,18 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     return graph;
   }
 
-  async function submitSingle(characterSlug: string, phaseBindingKey: string): Promise<SubmitResult> {
+  async function submitSingle(
+    characterSlug: string,
+    phaseBindingKey: string,
+    promptOverrides?: PromptOverrides,
+  ): Promise<SubmitResult> {
     const { slotId, version } = getActiveVersionOrThrow(phaseBindingKey);
     const character = getCharacterOrThrow(characterSlug);
 
-    const graph = await buildGraph(slotId, version, character, phaseBindingKey, {});
+    const graph = await buildGraph(slotId, version, character, phaseBindingKey, {
+      customPositivePrompt: promptOverrides?.customPositivePrompt,
+      customNegativePrompt: promptOverrides?.customNegativePrompt,
+    });
     const { promptId } = await comfyClient.submitPrompt(graph, clientId);
     promptOwners.set(promptId, { characterSlug, phaseBindingKey });
 

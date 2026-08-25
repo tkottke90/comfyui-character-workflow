@@ -47,6 +47,20 @@ export const DOMAIN_FIELDS: DomainField[] = [
   // whichever node/input is actually the seed (e.g. KSampler.seed) in the imported
   // casting workflow — the engine never guesses which input that is.
   { path: 'stage_input.casting_seed', label: 'Casting seed (per-candidate)', kind: 'stage-input' },
+  // Also special-cased by the resolver, supplied per-invocation from the trigger form
+  // rather than the character record — lets a run (e.g. a masked cleanup/targeted-fix
+  // edit) use fresh prompt text instead of the character's global identityBlock/
+  // negativePrompt, which has little relevance to what should appear in a masked spot.
+  {
+    path: 'stage_input.custom_positive_prompt',
+    label: 'Custom Positive Prompt',
+    kind: 'stage-input',
+  },
+  {
+    path: 'stage_input.custom_negative_prompt',
+    label: 'Custom Negative Prompt',
+    kind: 'stage-input',
+  },
   { path: 'stage_input.horizontal_angle', label: 'Horizontal angle', kind: 'stage-input' },
   { path: 'stage_input.vertical_angle', label: 'Vertical angle', kind: 'stage-input' },
   { path: 'stage_input.zoom', label: 'Zoom', kind: 'stage-input' },

@@ -72,6 +72,18 @@
       {% endif %}
 
       <form method="post" action="/characters/{{ character.slug }}/run/{{ phaseBindingKey }}" class="mt-2">
+        {% if phaseBindingKey == 'refinement_cleanup' %}
+          <p class="text-[12px] text-steel-500 mb-2">The character's global identity block/negative prompt has little to do with a background/artifact cleanup pass — use these to supply fresh text for this run instead.</p>
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="customPositivePrompt">Positive prompt</label>
+          <textarea id="customPositivePrompt" name="customPositivePrompt" rows="3"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-3"
+            placeholder="What should replace the cleaned-up area…"></textarea>
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="customNegativePrompt">Negative prompt</label>
+          <textarea id="customNegativePrompt" name="customNegativePrompt" rows="3"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-3"
+            placeholder="What to avoid in the cleaned-up area…"></textarea>
+        {% endif %}
         {{ ui.button('Running…' if jobActive else 'Run', 'primary', 'submit', jobActive or not currentImage) }}
       </form>
       {% if not currentImage %}

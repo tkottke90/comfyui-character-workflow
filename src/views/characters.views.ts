@@ -230,7 +230,10 @@ export function createCharactersRouter(
     }
 
     try {
-      await executionService.submitSingle(character.slug, phaseBindingKey);
+      await executionService.submitSingle(character.slug, phaseBindingKey, {
+        customPositivePrompt: String(req.body.customPositivePrompt ?? ''),
+        customNegativePrompt: String(req.body.customNegativePrompt ?? ''),
+      });
     } catch (err) {
       next(err);
       return;
@@ -494,6 +497,26 @@ export function createCharactersRouter(
     res.render('characters/refinement.njk', {
       ...baseContext(character),
       items: CHECKLIST_DEFINITIONS.refinement,
+      phaseBindingKey,
+      currentImage,
+      currentMask,
+      job: job ?? null,
+      jobActive: isJobActive(job),
+    });
+  });
+
+  // ---- Targeted Fix (007-Inpaint / targeted_fix) ----
+
+  router.get('/:slug/targeted-fix', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const phaseBindingKey = 'targeted_fix';
+    const { working } = characterImages.listImages(character.slug);
+    const currentImage = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'image');
+    const currentMask = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'mask');
+    const job = jobStore.get(character.slug, phaseBindingKey);
+
+    res.render('characters/targeted_fix.njk', {
+      ...baseContext(character),
       phaseBindingKey,
       currentImage,
       currentMask,
