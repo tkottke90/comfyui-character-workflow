@@ -72,11 +72,7 @@ function resolveCurrentImageOrMask(
   characterImages: CharacterImagesService,
 ): ResolvedNodeValue {
   const phaseBindingKey = phaseBindingKeyForVersion(version);
-  const { working } = characterImages.listImages(character.slug);
-
-  const latest = working
-    .filter((file) => file.phaseBindingKey === phaseBindingKey && file.kind === role)
-    .sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))[0];
+  const latest = characterImages.getCurrentWorkingFile(character.slug, phaseBindingKey, role);
 
   if (!latest) {
     throw new UnresolvableMappingError(

@@ -1,0 +1,61 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Images'}]) }}
+  <div class="flex items-center justify-between mb-5">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-black tracking-tight">Images</h1>
+      {{ ui.statusBadge(character.status) }}
+    </div>
+    {{ ui.mono(tiles.length ~ ' images') }}
+  </div>
+
+  {% if tiles.length == 0 %}
+    <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-8 text-center text-steel-500">
+      No images yet.
+    </div>
+  {% else %}
+    <div class="flex items-center gap-2 mb-4 flex-wrap" data-gallery-filter>
+      <button type="button" data-gallery-filter-btn="" class="rounded-full px-3 py-1 text-[12.5px] font-semibold bg-apple-600 text-white">All</button>
+      {% for option in filterOptions %}
+        <button type="button" data-gallery-filter-btn="{{ option.value }}" class="rounded-full px-3 py-1 text-[12.5px] font-semibold bg-steel-100 dark:bg-steel-800 text-steel-600 dark:text-steel-300">{{ option.label }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {% for tile in tiles %}
+        <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-gallery-tile data-source="{{ badges[tile.relativePath].value }}">
+          <div class="aspect-[3/4] relative overflow-hidden">
+            {% if tile.source.kind == 'finalized' %}
+              <img src="/characters/{{ character.slug }}/images/finalized/{{ tile.filename }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
+            {% else %}
+              <img src="/characters/{{ character.slug }}/images/file/{{ tile.relativePath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
+            {% endif %}
+            {% if tile.isCurrent %}
+              <div class="absolute top-1 right-1">{{ ui.pill('current', 'green') }}</div>
+            {% endif %}
+          </div>
+          <div class="p-2.5">
+            <div class="mb-1.5">{{ ui.pill(badges[tile.relativePath].label) }}</div>
+            {% if tile.source.kind == 'working' %}
+              <div class="flex flex-col gap-1 text-[12px]">
+                <a href="/characters/{{ character.slug }}/refinement?fromImage={{ tile.source.phaseBindingKey }}:{{ tile.filename }}" class="font-semibold text-apple-700 dark:text-apple-300 hover:underline">Send to Refinement</a>
+                <a href="/characters/{{ character.slug }}/targeted-fix?fromImage={{ tile.source.phaseBindingKey }}:{{ tile.filename }}" class="font-semibold text-apple-700 dark:text-apple-300 hover:underline">Send to Targeted Fix</a>
+                <a href="/characters/{{ character.slug }}/kit/views?fromImage={{ tile.source.phaseBindingKey }}:{{ tile.filename }}" class="font-semibold text-apple-700 dark:text-apple-300 hover:underline">Send to Poses</a>
+                <form method="post" action="/characters/{{ character.slug }}/images/{{ tile.source.phaseBindingKey }}/{{ tile.filename }}/delete"
+                  onsubmit="return confirm('{{ 'Delete this image? It is the current image for its phase, so after deleting it the next run will fall back to whatever image was current before it, or fail if none exists.' if tile.isCurrent else 'Delete this image? This cannot be undone.' }}');">
+                  <button type="submit" class="font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
+                </form>
+              </div>
+            {% elif tile.source.kind == 'finalized' %}
+              <a href="/characters/{{ character.slug }}/dataset" class="text-[12px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">View in Dataset →</a>
+            {% else %}
+              <a href="/characters/{{ character.slug }}/casting/batch" class="text-[12px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">View in Casting →</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

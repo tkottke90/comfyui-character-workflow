@@ -10,6 +10,7 @@ import { CharacterRecord } from '../schemas/character.schema';
 import { CharacterAttributesConfigSchema } from '../schemas/config.schema';
 import { NotFoundError, BadRequestError } from '../errors/http.errors';
 import { sanitizeSegment } from '../lib/path-sanitize';
+import { allPhaseBindings } from '../comfy/workflow-registry';
 import { CHECKLIST_DEFINITIONS } from '../checklist/definitions';
 import { DEFAULT_ATTRIBUTE_SUGGESTIONS } from '../lib/character-attribute-defaults';
 import {
@@ -102,6 +103,23 @@ function isJobActive(record: JobRecord | undefined): boolean {
   return record.subJobs.some((s) => s.status === 'queued' || s.status === 'running');
 }
 
+/**
+ * Parses the Images gallery's "Send to X" link format (`?fromImage=<phaseBindingKey>:<filename>`).
+ * Working-file phase-binding keys and filenames are never `:`-containing (sanitizeSegment's
+ * charset, and the timestamp/kind/extension naming scheme), so a plain split is unambiguous.
+ */
+function parseFromImageQuery(
+  req: Request,
+): { phaseBindingKey: string; filename: string } | undefined {
+  const raw = typeof req.query.fromImage === 'string' ? req.query.fromImage : undefined;
+  if (!raw) return undefined;
+
+  const separatorIndex = raw.indexOf(':');
+  if (separatorIndex === -1) return undefined;
+
+  return { phaseBindingKey: raw.slice(0, separatorIndex), filename: raw.slice(separatorIndex + 1) };
+}
+
 export function createCharactersRouter(
   app: Application,
   characters: CharactersService,
@@ -111,6 +129,33 @@ export function createCharactersRouter(
   jobStore: JobStore,
 ): Router {
   const router = Router();
+
+  /**
+   * Candidate images for a phase's "choose from library" picker (everything except that
+   * phase's own working files — its current image is already shown above the form), plus
+   * which one (if any) a `?fromImage=` gallery link is pointing at. A stale reference (the
+   * image was deleted since the link was generated) resolves to `undefined` — the panel
+   * just stays collapsed, not an error.
+   */
+  function buildLibraryPickerContext(req: Request, slug: string, phaseBindingKey: string) {
+    const fromImage = parseFromImageQuery(req);
+    const libraryCandidates = characterImages
+      .listGalleryTiles(slug)
+      .filter(
+        (tile) => tile.source.kind !== 'working' || tile.source.phaseBindingKey !== phaseBindingKey,
+      );
+
+    const highlightRelativePath = fromImage
+      ? libraryCandidates.find(
+          (tile) =>
+            tile.source.kind === 'working' &&
+            tile.source.phaseBindingKey === fromImage.phaseBindingKey &&
+            tile.filename === fromImage.filename,
+        )?.relativePath
+      : undefined;
+
+    return { libraryCandidates, highlightRelativePath };
+  }
 
   router.get('/', (_req: Request, res: Response) => {
     res.render('characters/list.njk', { characters: characters.list() });
@@ -158,8 +203,62 @@ export function createCharactersRouter(
 
   router.get('/:slug/images', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
-    res.json(characterImages.listImages(character.slug));
+    const tiles = characterImages.listGalleryTiles(character.slug);
+    const phaseBindingLabels = Object.fromEntries(allPhaseBindings().map((b) => [b.key, b.label]));
+
+    const badgeFor = (tile: (typeof tiles)[number]): { value: string; label: string } =>
+      tile.source.kind === 'working'
+        ? {
+            value: `working:${tile.source.phaseBindingKey}`,
+            label: phaseBindingLabels[tile.source.phaseBindingKey] ?? tile.source.phaseBindingKey,
+          }
+        : {
+            value: tile.source.kind,
+            label: tile.source.kind === 'finalized' ? 'Finalized' : 'Casting',
+          };
+
+    const filterOptions = Array.from(
+      new Map(tiles.map((tile) => [badgeFor(tile).value, badgeFor(tile)])).values(),
+    );
+
+    res.render('characters/images.njk', {
+      ...baseContext(character),
+      tiles,
+      badges: Object.fromEntries(tiles.map((tile) => [tile.relativePath, badgeFor(tile)])),
+      filterOptions,
+    });
   });
+
+  router.post('/:slug/images/:phaseBindingKey/:filename/delete', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    characterImages.deleteWorkingFile(
+      character.slug,
+      param(req, 'phaseBindingKey'),
+      param(req, 'filename'),
+    );
+    res.redirect(req.get('Referer') || `/characters/${character.slug}/images`);
+  });
+
+  router.post(
+    '/:slug/images/:phaseBindingKey/promote',
+    (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const sourceRelativePath = String(req.body.sourceRelativePath ?? '');
+      if (!sourceRelativePath) throw new BadRequestError('A source image is required');
+
+      try {
+        characterImages.promoteToPhaseBinding(
+          character.slug,
+          sourceRelativePath,
+          param(req, 'phaseBindingKey'),
+        );
+      } catch (err) {
+        next(err);
+        return;
+      }
+      res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+    },
+  );
 
   router.get(
     '/:slug/images/finalized/:filename',
@@ -213,34 +312,37 @@ export function createCharactersRouter(
   // it needs submitCastingBatch's N-separate-prompts handling and its own tile-grid UI,
   // which isn't wired up yet (tracked as follow-up work, not silently done here).
 
-  router.post('/:slug/run/:phaseBindingKey', async (req: Request, res: Response, next: NextFunction) => {
-    const character = getCharacterOr404(characters, param(req, 'slug'));
-    const phaseBindingKey = param(req, 'phaseBindingKey');
+  router.post(
+    '/:slug/run/:phaseBindingKey',
+    async (req: Request, res: Response, next: NextFunction) => {
+      const character = getCharacterOr404(characters, param(req, 'slug'));
+      const phaseBindingKey = param(req, 'phaseBindingKey');
 
-    if (phaseBindingKey === 'casting_batch') {
-      throw new BadRequestError('Casting batch is submitted separately, not through this route');
-    }
+      if (phaseBindingKey === 'casting_batch') {
+        throw new BadRequestError('Casting batch is submitted separately, not through this route');
+      }
 
-    // Best-effort duplicate-submit guard — not perfectly race-free against a second
-    // request landing between this check and submitSingle(), but sufficient for a
-    // single-user local app; a real lock isn't worth the complexity here.
-    if (isJobActive(jobStore.get(character.slug, phaseBindingKey))) {
+      // Best-effort duplicate-submit guard — not perfectly race-free against a second
+      // request landing between this check and submitSingle(), but sufficient for a
+      // single-user local app; a real lock isn't worth the complexity here.
+      if (isJobActive(jobStore.get(character.slug, phaseBindingKey))) {
+        res.redirect(req.get('Referer') || `/characters/${character.slug}`);
+        return;
+      }
+
+      try {
+        await executionService.submitSingle(character.slug, phaseBindingKey, {
+          customPositivePrompt: String(req.body.customPositivePrompt ?? ''),
+          customNegativePrompt: String(req.body.customNegativePrompt ?? ''),
+        });
+      } catch (err) {
+        next(err);
+        return;
+      }
+
       res.redirect(req.get('Referer') || `/characters/${character.slug}`);
-      return;
-    }
-
-    try {
-      await executionService.submitSingle(character.slug, phaseBindingKey, {
-        customPositivePrompt: String(req.body.customPositivePrompt ?? ''),
-        customNegativePrompt: String(req.body.customNegativePrompt ?? ''),
-      });
-    } catch (err) {
-      next(err);
-      return;
-    }
-
-    res.redirect(req.get('Referer') || `/characters/${character.slug}`);
-  });
+    },
+  );
 
   router.get('/:slug/events/:phaseBindingKey', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
@@ -456,7 +558,10 @@ export function createCharactersRouter(
     // keeps "every item through Casting & lock fully checked off" always literally true
     // right after a successful lock.
     const liveChecklist = deriveChecklist(character);
-    if (!liveChecklist['specification.attrs_filled'] || !liveChecklist['specification.identity_compiled']) {
+    if (
+      !liveChecklist['specification.attrs_filled'] ||
+      !liveChecklist['specification.identity_compiled']
+    ) {
       throw new BadRequestError(
         'Every universal attribute must be filled and the identity block compiled before locking',
       );
@@ -488,11 +593,22 @@ export function createCharactersRouter(
   router.get('/:slug/refinement', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
     const phaseBindingKey = REFINEMENT_PHASE_BINDING_BY_STEP[character.refinement.currentStep];
-    const { working } = characterImages.listImages(character.slug);
-    // working[] is sorted newest first, so the first match per kind is the current one.
-    const currentImage = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'image');
-    const currentMask = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'mask');
+    const currentImage = characterImages.getCurrentWorkingFile(
+      character.slug,
+      phaseBindingKey,
+      'image',
+    );
+    const currentMask = characterImages.getCurrentWorkingFile(
+      character.slug,
+      phaseBindingKey,
+      'mask',
+    );
     const job = jobStore.get(character.slug, phaseBindingKey);
+    const { libraryCandidates, highlightRelativePath } = buildLibraryPickerContext(
+      req,
+      character.slug,
+      phaseBindingKey,
+    );
 
     res.render('characters/refinement.njk', {
       ...baseContext(character),
@@ -502,6 +618,8 @@ export function createCharactersRouter(
       currentMask,
       job: job ?? null,
       jobActive: isJobActive(job),
+      libraryCandidates,
+      highlightRelativePath,
     });
   });
 
@@ -510,10 +628,22 @@ export function createCharactersRouter(
   router.get('/:slug/targeted-fix', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
     const phaseBindingKey = 'targeted_fix';
-    const { working } = characterImages.listImages(character.slug);
-    const currentImage = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'image');
-    const currentMask = working.find((f) => f.phaseBindingKey === phaseBindingKey && f.kind === 'mask');
+    const currentImage = characterImages.getCurrentWorkingFile(
+      character.slug,
+      phaseBindingKey,
+      'image',
+    );
+    const currentMask = characterImages.getCurrentWorkingFile(
+      character.slug,
+      phaseBindingKey,
+      'mask',
+    );
     const job = jobStore.get(character.slug, phaseBindingKey);
+    const { libraryCandidates, highlightRelativePath } = buildLibraryPickerContext(
+      req,
+      character.slug,
+      phaseBindingKey,
+    );
 
     res.render('characters/targeted_fix.njk', {
       ...baseContext(character),
@@ -522,6 +652,8 @@ export function createCharactersRouter(
       currentMask,
       job: job ?? null,
       jobActive: isJobActive(job),
+      libraryCandidates,
+      highlightRelativePath,
     });
   });
 
@@ -613,11 +745,30 @@ export function createCharactersRouter(
 
   router.get('/:slug/kit/views', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
+    const fromImage = parseFromImageQuery(req);
+    const highlightTile = fromImage
+      ? characterImages
+          .listGalleryTiles(character.slug)
+          .find(
+            (tile) =>
+              tile.source.kind === 'working' &&
+              tile.source.phaseBindingKey === fromImage.phaseBindingKey &&
+              tile.filename === fromImage.filename,
+          )
+      : undefined;
+    const highlightImageSrc = highlightTile
+      ? highlightTile.source.kind === 'finalized'
+        ? `/characters/${character.slug}/images/finalized/${highlightTile.filename}`
+        : `/characters/${character.slug}/images/file/${highlightTile.relativePath}`
+      : undefined;
+
     res.render('characters/view_generation.njk', {
       ...baseContext(character),
       availableViewDefs: VIEW_DEFINITIONS.filter(
         (def) => !character.views.some((v) => v.key === def.key),
       ),
+      highlightRelativePath: highlightTile?.relativePath,
+      highlightImageSrc,
     });
   });
 
