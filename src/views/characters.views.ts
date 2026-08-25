@@ -3,6 +3,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { Application } from '../types/application';
 import { CharactersService } from '../services/characters.service';
 import { TemplatesService } from '../services/templates.service';
+import { StylesService } from '../services/styles.service';
 import { CharacterImagesService } from '../services/character-images.service';
 import { ExecutionService } from '../services/execution.service';
 import { JobRecord, JobStore } from '../services/job-store.service';
@@ -14,6 +15,7 @@ import { allPhaseBindings } from '../comfy/workflow-registry';
 import { CHECKLIST_DEFINITIONS } from '../checklist/definitions';
 import { DEFAULT_ATTRIBUTE_SUGGESTIONS } from '../lib/character-attribute-defaults';
 import {
+  applyStyleToCharacter,
   compileIdentityBlock,
   defaultAuditRows,
   deriveChecklist,
@@ -124,6 +126,7 @@ export function createCharactersRouter(
   app: Application,
   characters: CharactersService,
   templates: TemplatesService,
+  styles: StylesService,
   characterImages: CharacterImagesService,
   executionService: ExecutionService,
   jobStore: JobStore,
@@ -390,6 +393,7 @@ export function createCharactersRouter(
     res.render('characters/spec.njk', {
       ...baseContext(character),
       templates: templates.list(),
+      styles: styles.list(),
       checklistItems: CHECKLIST_DEFINITIONS.specification,
       previewIdentityBlock: compileIdentityBlock(
         character.name,
@@ -411,12 +415,16 @@ export function createCharactersRouter(
       ? character.identityBlock
       : compileIdentityBlock(character.name, useNameAsToken, attributes);
 
+    const styleSlug = String(req.body.styleSlug ?? '').trim();
+    const selectedStyle = styleSlug ? styles.get(styleSlug) : undefined;
+
     characters.update(character.slug, {
       attributes,
       useNameAsToken,
       body_template: String(req.body.body_template ?? character.body_template),
       identityBlock,
       negativePrompt: String(req.body.negativePrompt ?? '') || DEFAULT_NEGATIVE_PROMPT,
+      ...(selectedStyle ? applyStyleToCharacter(selectedStyle) : {}),
     });
 
     res.redirect(`/characters/${character.slug}/spec`);

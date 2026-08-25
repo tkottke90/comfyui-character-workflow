@@ -1,4 +1,5 @@
 import type { AuditRow, Attributes, Character } from '../schemas/character.schema';
+import type { StyleRecord } from '../schemas/style.schema';
 import {
   CHECKLIST_DEFINITIONS,
   CHECKLIST_PHASES,
@@ -220,6 +221,23 @@ export function defaultAuditRows(attributes: Attributes): AuditRow[] {
 
 export function findImagePath(images: Character['images'], label: string): string {
   return images.find((image) => image.label === label)?.path ?? '';
+}
+
+/**
+ * Copies a Style's generation settings onto a character as a one-time
+ * snapshot — not a live binding. `styleSourceName` is a display-only label;
+ * it's never re-synced if the source style is later edited or deleted.
+ */
+export function applyStyleToCharacter(style: StyleRecord): Partial<Character> {
+  return {
+    style: style.artStyle,
+    checkpoint: style.checkpoint,
+    sampler: style.sampler,
+    scheduler: style.scheduler,
+    cfg: style.cfg,
+    steps: style.steps,
+    styleSourceName: style.name,
+  };
 }
 
 /**

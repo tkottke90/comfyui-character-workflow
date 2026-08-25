@@ -1,0 +1,38 @@
+{% extends "layout.njk" %}
+{% set section = "styles" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-xl font-black tracking-tight">Styles</h1>
+      <p class="text-[13.5px] text-steel-500 mt-1">
+        Reusable checkpoint/sampler/scheduler/cfg/steps combinations — apply one from a character's spec builder.
+      </p>
+    </div>
+    <a href="/styles/new" class="inline-flex items-center rounded-md px-4 py-2 text-[14px] font-semibold bg-apple-600 hover:bg-apple-700 text-white shrink-0">+ Add Style</a>
+  </div>
+
+  {% if styles.length == 0 %}
+    <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-10 text-center text-steel-500">
+      No styles yet — add one to reuse a checkpoint/sampler/scheduler/cfg/steps combination across characters.
+    </div>
+  {% else %}
+    <div class="bg-white dark:bg-steel-900 border border-steel-200 dark:border-steel-800 rounded-lg shadow-sm overflow-hidden">
+      <div class="grid grid-cols-[1fr_1.4fr_28px] gap-3 px-4 py-2 bg-steel-100 dark:bg-steel-800 text-[11px] font-bold uppercase tracking-wider text-steel-500 dark:text-steel-400">
+        <div>Name</div>
+        <div>Checkpoint · sampler · scheduler · steps · cfg</div>
+        <div></div>
+      </div>
+      {% for style in styles %}
+        <a href="/styles/{{ style.slug }}" class="grid grid-cols-[1fr_1.4fr_28px] gap-3 items-center px-4 py-2.5 border-b border-steel-200 dark:border-steel-800 last:border-0 text-[13.5px] hover:bg-steel-50 dark:hover:bg-steel-800/50">
+          <div>
+            <div class="font-bold">{{ style.name }}</div>
+            {% if style.description %}<div class="text-[12px] text-steel-500">{{ style.description }}</div>{% endif %}
+          </div>
+          <div class="font-mono text-[12.5px] text-steel-500 truncate">{{ style.checkpoint }} · {{ style.sampler }} · {{ style.scheduler }} · {{ style.steps }} steps · cfg {{ style.cfg }}</div>
+          <div class="text-right text-steel-400">&rsaquo;</div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
