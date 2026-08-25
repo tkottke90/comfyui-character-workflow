@@ -12,6 +12,15 @@ export type ComfyUiConfig = z.infer<typeof ComfyUiConfigSchema>;
 export const CharacterAttributesConfigSchema = z.record(z.string(), z.array(z.string())).default({});
 export type CharacterAttributesConfig = z.infer<typeof CharacterAttributesConfigSchema>;
 
+/** Keyed by phaseBindingKey (see comfy/workflow-registry.ts) — an optional prefix/suffix
+ *  auto-wrapped around that phase's positive prompt text (character.identityBlock,
+ *  character.identityBlockFrozen, stage_input.custom_positive_prompt) when its graph is
+ *  built. Keys with no matching phase binding are simply never looked up. */
+export const PhasePromptConfigSchema = z
+  .record(z.string(), z.object({ prefix: z.string().default(''), suffix: z.string().default('') }))
+  .default({});
+export type PhasePromptConfig = z.infer<typeof PhasePromptConfigSchema>;
+
 export const ConfigSchema = z.object({
   port: z.number().default(3000),
   host: z.string().default('localhost'),
@@ -22,5 +31,6 @@ export const ConfigSchema = z.object({
     }
   }),
   'comfy-ui': ComfyUiConfigSchema.default(() => ComfyUiConfigSchema.parse({})),
-  'character-attributes': CharacterAttributesConfigSchema
+  'character-attributes': CharacterAttributesConfigSchema,
+  'phase-prompt': PhasePromptConfigSchema
 });

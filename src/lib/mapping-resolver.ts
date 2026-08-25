@@ -37,6 +37,11 @@ export interface ResolvedMapping {
   nodeId: string;
   inputName: string;
   classType: string;
+  /** The domain field path this mapping resolved from (e.g. 'character.identityBlock'), or
+   *  the literal static string for a 'static' mapping. Lets callers like buildGraph()
+   *  recognize specific domain fields (positive-prompt fields, for phase prefix/suffix)
+   *  without re-deriving them from the source NodeMapping. */
+  sourceValue: string;
   resolved: ResolvedNodeValue;
 }
 
@@ -175,6 +180,7 @@ export function resolveMapping(
       nodeId: node.nodeId,
       inputName: node.inputName,
       classType: node.classType,
+      sourceValue: node.sourceValue,
       resolved: resolveNode(node, version, character, characterImages, context),
     }));
 }
