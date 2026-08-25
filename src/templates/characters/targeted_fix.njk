@@ -1,0 +1,109 @@
+{% extends "layout.njk" %}
+{% set section = "characters" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Targeted Fix'}]) }}
+  <div class="flex items-center gap-3 mb-6">
+    <h1 class="text-xl font-black tracking-tight">Targeted Fix</h1>
+    {{ ui.statusBadge(character.status) }}
+  </div>
+
+  <!-- Each grid cell below is its own independent <form>, same layout convention as
+       refinement.njk — nesting them into one page-wide form isn't valid HTML. -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+    <div>
+      <div class="text-[11.5px] font-bold uppercase tracking-wider text-steel-500 mb-2">Input</div>
+      <div data-file-upload>
+        <form method="post" action="/characters/{{ character.slug }}/images/{{ phaseBindingKey }}">
+          <input type="hidden" name="dataUrl" value="" />
+          <input type="hidden" name="kind" value="image" />
+          <div class="relative aspect-[3/4] rounded-lg border-2 border-dashed border-steel-300 dark:border-steel-700 overflow-hidden cursor-pointer mb-2"
+            onclick="this.parentElement.querySelector('input[type=file]').click()">
+            <img {% if currentImage %}src="/characters/{{ character.slug }}/images/file/{{ currentImage.relativePath }}"{% endif %}
+              data-file-preview class="{{ '' if currentImage else 'hidden' }} absolute inset-0 w-full h-full object-cover" alt="" />
+            <div class="absolute inset-0 flex items-center justify-center text-center p-3 text-[13px] font-semibold text-steel-500" data-file-label>
+              {{ '' if currentImage else 'Drag an image here, or click to browse' }}
+            </div>
+          </div>
+          <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
+          {{ ui.button('Save as current image', 'secondary') }}
+        </form>
+      </div>
+    </div>
+
+    <div>
+      <div class="text-[11.5px] font-bold uppercase tracking-wider text-apple-700 dark:text-apple-300 mb-2">Output preview</div>
+      <div data-sse-events="/characters/{{ character.slug }}/events/{{ phaseBindingKey }}" class="aspect-[3/4] rounded-lg border border-apple-300 relative overflow-hidden">
+        {% if job and job.kind == 'single' and job.status == 'done' and job.resultPath %}
+          <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
+        {% else %}
+          <div class="placeholder-photo absolute inset-0"></div>
+        {% endif %}
+        <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[12px] px-2 py-1" data-sse-status></div>
+        <progress data-sse-progress class="hidden w-full h-1" max="100" value="0"></progress>
+      </div>
+
+      {% if job and job.kind == 'single' and job.status == 'error' and job.error %}
+        <div class="mt-2 rounded-md border border-rose-300 bg-rose-50 dark:bg-rose-950 dark:border-rose-800 px-3 py-2 text-[12.5px] text-rose-800 dark:text-rose-300">
+          {% if job.error.kind == 'connection' %}
+            Lost the connection to ComfyUI mid-run: {{ job.error.message }}
+            <a href="/integration/connection" class="block mt-1 font-semibold underline">Check Connection →</a>
+          {% else %}
+            {{ job.error.message }}
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% call ui.card('Current Mask') %}
+    <p class="text-[13px] text-steel-500 mb-3">Painted white on black — used as the inpaint mask for this step. Draw a polygon over the current image, or upload a mask that already matches its exact pixel dimensions.</p>
+    {% if currentImage %}
+      <form method="post" action="/characters/{{ character.slug }}/images/{{ phaseBindingKey }}">
+        <input type="hidden" name="kind" value="mask" />
+        <div data-mask-editor data-image-src="/characters/{{ character.slug }}/images/file/{{ currentImage.relativePath }}">
+          <div class="flex items-center gap-2 mb-2">
+            <button type="button" data-mask-mode-btn="draw" class="rounded-md border border-steel-300 dark:border-steel-700 px-3 py-1 text-[12.5px] font-semibold">Draw</button>
+            <button type="button" data-mask-mode-btn="upload" class="rounded-md border border-steel-300 dark:border-steel-700 px-3 py-1 text-[12.5px] font-semibold">Upload</button>
+          </div>
+          <canvas data-mask-canvas class="max-w-full rounded-lg border border-steel-300 dark:border-steel-700 mb-2"></canvas>
+          <div data-mask-draw-tools class="flex items-center gap-2 mb-2">
+            <button type="button" data-mask-add-vertex class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Add vertex</button>
+            <button type="button" data-mask-remove-vertex class="text-[12.5px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Remove vertex</button>
+          </div>
+          <div data-mask-upload-tools class="mb-2 hidden">
+            <input type="file" accept="image/png,image/jpeg,image/webp" data-mask-upload-input class="text-[13px]" />
+          </div>
+          <input type="hidden" name="maskMode" data-mask-mode value="draw" />
+          <input type="hidden" name="dataUrl" data-mask-data-url />
+        </div>
+        {% if currentMask %}
+          <p class="text-[12px] text-steel-500 mt-2 mb-2">A mask is already saved for this step — saving again adds a new version.</p>
+        {% endif %}
+        {{ ui.button('Save as current mask', 'secondary') }}
+      </form>
+    {% else %}
+      <p class="text-[13px] text-steel-500">Save a current image above first — the mask editor needs it as a reference.</p>
+    {% endif %}
+  {% endcall %}
+
+  <form method="post" action="/characters/{{ character.slug }}/run/{{ phaseBindingKey }}" class="mt-5">
+    {% call ui.card('Prompts for this run') %}
+      <p class="text-[13px] text-steel-500 mb-3">Describe what should appear inside the masked area — the character's global identity block/negative prompt has little to do with a small, targeted edit, so this run uses fresh text instead.</p>
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="customPositivePrompt">Positive prompt</label>
+      <textarea id="customPositivePrompt" name="customPositivePrompt" rows="3"
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4"
+        placeholder="What should replace the masked area…"></textarea>
+
+      <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="customNegativePrompt">Negative prompt</label>
+      <textarea id="customNegativePrompt" name="customNegativePrompt" rows="3"
+        class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-4"
+        placeholder="What to avoid in the masked area…"></textarea>
+
+      {{ ui.button('Running…' if jobActive else 'Run', 'primary', 'submit', jobActive or not currentImage) }}
+      {% if not currentImage %}
+        <p class="text-[12px] text-steel-500 mt-1">Save a current image before running this step.</p>
+      {% endif %}
+    {% endcall %}
+  </form>
+{% endblock %}

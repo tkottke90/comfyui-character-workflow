@@ -14,6 +14,8 @@ export class UnresolvableMappingError extends Error {
 const CURRENT_IMAGE_PATH = 'stage_input.current_image';
 const CURRENT_MASK_PATH = 'stage_input.current_mask';
 const CASTING_SEED_PATH = 'stage_input.casting_seed';
+const CUSTOM_POSITIVE_PROMPT_PATH = 'stage_input.custom_positive_prompt';
+const CUSTOM_NEGATIVE_PROMPT_PATH = 'stage_input.custom_negative_prompt';
 
 export type ResolvedNodeValue =
   | { kind: 'literal'; value: string }
@@ -21,11 +23,14 @@ export type ResolvedNodeValue =
 
 /**
  * Per-invocation values a caller supplies at resolve time, rather than something the
- * resolver can look up on its own — currently just the per-candidate seed a casting-batch
- * submission overrides on each of its N separate /prompt calls.
+ * resolver can look up on its own — the per-candidate seed a casting-batch submission
+ * overrides on each of its N separate /prompt calls, and the free-text prompt overrides a
+ * single-phase trigger form (e.g. a masked cleanup/targeted-fix run) may supply.
  */
 export interface ResolutionContext {
   castingSeed?: number;
+  customPositivePrompt?: string;
+  customNegativePrompt?: string;
 }
 
 export interface ResolvedMapping {
@@ -107,6 +112,15 @@ function resolveDomainField(
       );
     }
     return { kind: 'literal', value: String(context.castingSeed) };
+  }
+  // Unlike casting_seed, a blank custom prompt is a legitimate per-run choice (e.g. "don't
+  // override the node's baked-in text this time") rather than a missing required value, so
+  // this resolves to an empty-string literal instead of throwing when unsupplied.
+  if (sourceValue === CUSTOM_POSITIVE_PROMPT_PATH) {
+    return { kind: 'literal', value: context.customPositivePrompt ?? '' };
+  }
+  if (sourceValue === CUSTOM_NEGATIVE_PROMPT_PATH) {
+    return { kind: 'literal', value: context.customNegativePrompt ?? '' };
   }
   if (sourceValue.startsWith('stage_input.')) {
     throw new UnresolvableMappingError(
