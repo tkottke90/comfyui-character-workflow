@@ -380,6 +380,7 @@ export function createCharactersRouter(
     res.render('characters/spec.njk', {
       ...baseContext(character),
       templates: templates.list(),
+      checklistItems: CHECKLIST_DEFINITIONS.specification,
       previewIdentityBlock: compileIdentityBlock(
         character.name,
         character.useNameAsToken,
@@ -429,6 +430,18 @@ export function createCharactersRouter(
     characters.update(character.slug, {
       distinguishingFeatures: character.distinguishingFeatures.filter((_, i) => i !== index),
     });
+    res.redirect(`/characters/${character.slug}/spec`);
+  });
+
+  router.post('/:slug/spec/checklist', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const manualItems = ['features_listed', 'features_verifiable'];
+    const checked = req.body.checklist ?? {};
+    const checklist = { ...character.checklist };
+    for (const id of manualItems) {
+      checklist[`specification.${id}`] = Boolean(checked[id]);
+    }
+    characters.update(character.slug, { checklist });
     res.redirect(`/characters/${character.slug}/spec`);
   });
 

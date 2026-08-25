@@ -265,6 +265,23 @@ describe('deriveChecklist', () => {
     expect(deriveChecklist(short)['dataset.images_generated']).to.equal(false);
     expect(deriveChecklist(enough)['dataset.images_generated']).to.equal(true);
   });
+
+  it('derives downstreamValidation items from each test passing', () => {
+    const mixed = CharacterSchema.parse({
+      name: 'X',
+      created: 'd',
+      updated: 'd',
+      downstreamValidation: {
+        newPose: { status: 'pass', note: '' },
+        newOutfit: { status: 'fail', note: '' },
+        noTemplateProportions: { status: 'not-run', note: '' },
+      },
+    });
+    const checklist = deriveChecklist(mixed);
+    expect(checklist['downstreamValidation.new_pose']).to.equal(true);
+    expect(checklist['downstreamValidation.new_outfit']).to.equal(false);
+    expect(checklist['downstreamValidation.no_template_proportions']).to.equal(false);
+  });
 });
 
 describe('parsePhaseChecklist', () => {

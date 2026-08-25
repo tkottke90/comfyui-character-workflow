@@ -136,6 +136,7 @@ export function deriveChecklist(
     | 'views'
     | 'images'
     | 'dataset'
+    | 'downstreamValidation'
   >,
 ): Record<string, boolean> {
   const checklist = { ...character.checklist };
@@ -160,6 +161,13 @@ export function deriveChecklist(
 
   checklist['dataset.images_generated'] =
     character.dataset.imagesCount >= character.dataset.targetMin;
+
+  checklist['downstreamValidation.new_pose'] =
+    character.downstreamValidation.newPose.status === 'pass';
+  checklist['downstreamValidation.new_outfit'] =
+    character.downstreamValidation.newOutfit.status === 'pass';
+  checklist['downstreamValidation.no_template_proportions'] =
+    character.downstreamValidation.noTemplateProportions.status === 'pass';
 
   return checklist;
 }
