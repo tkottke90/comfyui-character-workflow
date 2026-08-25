@@ -11,6 +11,7 @@
   <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
     <div>
       <div data-sse-events="/characters/{{ character.slug }}/events/{{ phaseBindingKey }}"
+        data-initial-status="{{ job.status if job else '' }}"
         class="aspect-[2/3] max-h-[520px] rounded-lg border border-apple-300 relative overflow-hidden">
         {% if job and job.kind == 'single' and job.status == 'done' and job.resultPath %}
           <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
