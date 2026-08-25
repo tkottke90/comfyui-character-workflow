@@ -97,6 +97,29 @@
       {% call ui.card('Identity block · live preview') %}
         <pre data-identity-preview class="whitespace-pre-wrap font-mono text-[12.5px] text-steel-600 dark:text-steel-300">{{ previewIdentityBlock }}</pre>
       {% endcall %}
+
+      {% set manualItems = ['features_listed', 'features_verifiable'] %}
+      {% call ui.card('Specification checklist') %}
+        {% for item in checklistItems %}
+          {% if item.id in manualItems %}
+            <form method="post" action="/characters/{{ character.slug }}/spec/checklist" class="inline">
+              {% for other in manualItems %}
+                {% if other != item.id and checklist['specification.' + other] %}
+                  <input type="hidden" name="checklist[{{ other }}]" value="on" />
+                {% endif %}
+              {% endfor %}
+              <label class="flex items-start gap-2.5 py-1.5 text-[14px] cursor-pointer">
+                <input type="checkbox" name="checklist[{{ item.id }}]" onchange="this.form.submit()"
+                  {% if checklist['specification.' + item.id] %}checked{% endif %}
+                  class="mt-0.5 h-4 w-4 shrink-0 rounded accent-apple-600" />
+                <span>{{ item.label }}</span>
+              </label>
+            </form>
+          {% else %}
+            {{ ui.checkrow('_readonly', checklist['specification.' + item.id], item.label, true) }}
+          {% endif %}
+        {% endfor %}
+      {% endcall %}
     </div>
   </div>
 {% endblock %}
