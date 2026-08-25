@@ -38,8 +38,13 @@
       <form method="post" action="/characters/{{ character.slug }}/run/{{ phaseBindingKey }}" class="mt-3 flex items-end gap-3">
         <div>
           <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="castingSeed">Seed (fixed for pre-flight)</label>
-          <input id="castingSeed" name="castingSeed" type="number" required
-            class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono w-40" />
+          <div class="flex items-center gap-2">
+            <input id="castingSeed" name="castingSeed" type="number" required
+              class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono w-40" />
+            <span data-randomize-seed="castingSeed">
+              {{ ui.button('Randomize', 'secondary', 'button') }}
+            </span>
+          </div>
         </div>
         {{ ui.button('Running…' if jobActive else 'Run Pre-flight', 'primary', 'submit', jobActive) }}
       </form>

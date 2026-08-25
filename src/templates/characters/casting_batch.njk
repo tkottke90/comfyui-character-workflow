@@ -16,8 +16,13 @@
       <div class="flex items-end gap-3 flex-wrap">
         <div>
           <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="startSeed">Starting seed</label>
-          <input id="startSeed" name="startSeed" type="number" required
-            class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono w-48" />
+          <div class="flex items-center gap-2">
+            <input id="startSeed" name="startSeed" type="number" required
+              class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] font-mono w-48" />
+            <span data-randomize-seed="startSeed">
+              {{ ui.button('Randomize', 'secondary', 'button') }}
+            </span>
+          </div>
         </div>
         <div>
           <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="count">Count (8–16)</label>
