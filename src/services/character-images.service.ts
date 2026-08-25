@@ -31,6 +31,18 @@ export interface FinalizeResult {
   deleted: string[];
 }
 
+export type ImageSource =
+  { kind: 'working'; phaseBindingKey: string } | { kind: 'finalized' } | { kind: 'casting' };
+
+export interface GalleryTile {
+  relativePath: string;
+  filename: string;
+  timestamp: string;
+  source: ImageSource;
+  /** Whether this is the newest working file for its phase binding — meaningless for finalized/casting tiles, always false there. */
+  isCurrent: boolean;
+}
+
 export interface CharacterImagesService {
   storeWorkingFile(
     slug: string,
@@ -39,8 +51,40 @@ export interface CharacterImagesService {
     dataUrl: string,
   ): WorkingFile;
   storeCastingCandidate(slug: string, seed: number, dataUrl: string): string;
-  promoteToPhaseBinding(slug: string, sourceRelativePath: string, targetPhaseBindingKey: string): WorkingFile;
+  promoteToPhaseBinding(
+    slug: string,
+    sourceRelativePath: string,
+    targetPhaseBindingKey: string,
+  ): WorkingFile;
   listImages(slug: string): CharacterImageListing;
+  /**
+   * The newest working file for a phase binding + kind — "current" is derived, not stored,
+   * so this single helper is the one place that definition lives (job submission and the
+   * refinement/targeted-fix pages all need the same answer).
+   */
+  getCurrentWorkingFile(
+    slug: string,
+    phaseBindingKey: string,
+    kind: 'image' | 'mask',
+  ): WorkingFile | undefined;
+  /**
+   * Deletes a single working file. Idempotent — deleting an already-gone file is treated as
+   * success, not an error, since the end state the caller wants is already true. Reports
+   * whether the deleted file was the current one for its phase binding, computed before the
+   * delete, so callers can warn about the consequence up front rather than after the fact.
+   */
+  deleteWorkingFile(
+    slug: string,
+    phaseBindingKey: string,
+    filename: string,
+  ): { deleted: boolean; wasCurrent: boolean };
+  /**
+   * Every image belonging to a character — working files (image kind only; masks stay
+   * inline in the mask editor, not standalone gallery tiles), finalized picks, and casting
+   * candidates — as one flat, newest-first list for the Images gallery and the
+   * choose-from-library pickers.
+   */
+  listGalleryTiles(slug: string): GalleryTile[];
   /**
    * Finalization is a picker screen, not an inferred rule: the caller (a human reviewing
    * every working file) supplies exactly the relative paths that fed the external LoRA
@@ -58,14 +102,19 @@ export interface CharacterImagesService {
 }
 
 const TIMESTAMP_DIR_SKIP = new Set([FINALIZED_DIR_NAME]);
+const WORKING_FILENAME_PATTERN = /^(\d{14})-(image|mask)(?:-\d+)?\.[^.]+$/;
+const CASTING_FILENAME_PATTERN = /^seed-.+\.[^.]+$/;
 
-function timestamp(): string {
-  const d = new Date();
+function formatTimestamp(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return (
     `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
     `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`
   );
+}
+
+function timestamp(): string {
+  return formatTimestamp(new Date());
 }
 
 export function createCharacterImagesService(dir: string): CharacterImagesService {
@@ -132,7 +181,7 @@ export function createCharacterImagesService(dir: string): CharacterImagesServic
       const phaseBindingKey = entry.name;
       const phaseDir = path.join(root, phaseBindingKey);
       for (const filename of fs.readdirSync(phaseDir)) {
-        const match = /^(\d{14})-(image|mask)(?:-\d+)?\.[^.]+$/.exec(filename);
+        const match = WORKING_FILENAME_PATTERN.exec(filename);
         if (!match) continue;
 
         working.push({
@@ -148,6 +197,15 @@ export function createCharacterImagesService(dir: string): CharacterImagesServic
     working.sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
 
     return { finalized, working };
+  }
+
+  function computeCastingCandidates(slug: string): FinalizedImage[] {
+    const dirPath = path.join(characterDir(slug), CASTING_BATCH_DIR_NAME);
+    if (!fs.existsSync(dirPath)) return [];
+    return fs
+      .readdirSync(dirPath)
+      .filter((filename) => CASTING_FILENAME_PATTERN.test(filename))
+      .map((filename) => ({ filename, relativePath: path.join(CASTING_BATCH_DIR_NAME, filename) }));
   }
 
   return {
@@ -208,6 +266,80 @@ export function createCharacterImagesService(dir: string): CharacterImagesServic
 
     listImages(slug) {
       return computeListing(slug);
+    },
+
+    getCurrentWorkingFile(slug, phaseBindingKey, kind) {
+      return computeListing(slug).working.find(
+        (file) => file.phaseBindingKey === phaseBindingKey && file.kind === kind,
+      );
+    },
+
+    deleteWorkingFile(slug, phaseBindingKey, filename) {
+      const key = sanitizeSegment(phaseBindingKey);
+      const safeFilename = sanitizeSegment(filename);
+      const match = WORKING_FILENAME_PATTERN.exec(safeFilename);
+      if (!match) return { deleted: false, wasCurrent: false };
+      const kind = match[2] as 'image' | 'mask';
+
+      const targetPath = resolveWithinCharacterDir(slug, path.join(key, safeFilename));
+      if (!fs.existsSync(targetPath)) return { deleted: false, wasCurrent: false };
+
+      const current = computeListing(slug).working.find(
+        (file) => file.phaseBindingKey === key && file.kind === kind,
+      );
+      const wasCurrent = current?.filename === safeFilename;
+
+      fs.unlinkSync(targetPath);
+      return { deleted: true, wasCurrent };
+    },
+
+    listGalleryTiles(slug) {
+      const root = characterDir(slug);
+      const { finalized, working } = computeListing(slug);
+
+      const currentImageFilenameByPhase = new Map<string, string>();
+      for (const file of working) {
+        if (file.kind !== 'image') continue;
+        if (!currentImageFilenameByPhase.has(file.phaseBindingKey)) {
+          currentImageFilenameByPhase.set(file.phaseBindingKey, file.filename);
+        }
+      }
+
+      const workingTiles: GalleryTile[] = working
+        .filter((file) => file.kind === 'image')
+        .map((file) => ({
+          relativePath: file.relativePath,
+          filename: file.filename,
+          timestamp: file.timestamp,
+          source: { kind: 'working', phaseBindingKey: file.phaseBindingKey },
+          isCurrent: currentImageFilenameByPhase.get(file.phaseBindingKey) === file.filename,
+        }));
+
+      // finalizedImages/ and casting_batch/ files carry no timestamp of their own — mtime is
+      // an honest, real ordering signal to interleave them with working files' timestamps,
+      // rather than inventing one.
+      const mtimeTimestamp = (relativePath: string): string =>
+        formatTimestamp(fs.statSync(path.join(root, relativePath)).mtime);
+
+      const finalizedTiles: GalleryTile[] = finalized.map((file) => ({
+        relativePath: file.relativePath,
+        filename: file.filename,
+        timestamp: mtimeTimestamp(file.relativePath),
+        source: { kind: 'finalized' },
+        isCurrent: false,
+      }));
+
+      const castingTiles: GalleryTile[] = computeCastingCandidates(slug).map((file) => ({
+        relativePath: file.relativePath,
+        filename: file.filename,
+        timestamp: mtimeTimestamp(file.relativePath),
+        source: { kind: 'casting' },
+        isCurrent: false,
+      }));
+
+      return [...workingTiles, ...finalizedTiles, ...castingTiles].sort((a, b) =>
+        a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0,
+      );
     },
 
     finalize(slug, selectedRelativePaths) {

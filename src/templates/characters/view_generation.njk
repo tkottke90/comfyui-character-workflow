@@ -11,6 +11,13 @@
     {{ ui.mono(character.views.length ~ ' views added') }}
   </div>
 
+  {% if highlightRelativePath %}
+    <div class="rounded-lg border border-apple-300 bg-apple-50 dark:bg-apple-950 p-3 mb-4 flex items-center gap-3" data-poses-picked-image data-relative-path="{{ highlightRelativePath }}">
+      <img src="{{ highlightImageSrc }}" class="w-16 h-16 object-cover rounded-md" alt="" />
+      <div class="text-[13px] text-steel-600 dark:text-steel-300">Picked from the Images gallery. Click "Use this image" on the view you want it to seed — no generation happens here, this just fills in that view's image path.</div>
+    </div>
+  {% endif %}
+
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
     {% for view in character.views %}
       <form method="post" action="/characters/{{ character.slug }}/kit/views/{{ view.key }}">
@@ -46,6 +53,10 @@
               {% endfor %}
             </select>
           </label>
+
+          {% if highlightRelativePath %}
+            <button type="button" data-use-picked-image class="block mb-2 text-[12px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Use this image</button>
+          {% endif %}
 
           <div class="flex items-center justify-between">
             <button type="submit" class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Save</button>

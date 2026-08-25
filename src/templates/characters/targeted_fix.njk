@@ -29,6 +29,26 @@
           {{ ui.button('Save as current image', 'secondary') }}
         </form>
       </div>
+
+      {% if libraryCandidates.length > 0 %}
+        <div class="mt-2">
+          <button type="button" data-picker-toggle class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Choose from library</button>
+          <div data-picker-panel data-highlight="{{ highlightRelativePath or '' }}" class="hidden mt-2 grid grid-cols-3 gap-2">
+            {% for candidate in libraryCandidates %}
+              <form method="post" action="/characters/{{ character.slug }}/images/{{ phaseBindingKey }}/promote" data-picker-tile data-relative-path="{{ candidate.relativePath }}">
+                <input type="hidden" name="sourceRelativePath" value="{{ candidate.relativePath }}" />
+                <button type="submit" class="block w-full aspect-square rounded-md overflow-hidden border border-steel-300 dark:border-steel-700">
+                  {% if candidate.source.kind == 'finalized' %}
+                    <img src="/characters/{{ character.slug }}/images/finalized/{{ candidate.filename }}" class="w-full h-full object-cover" alt="" />
+                  {% else %}
+                    <img src="/characters/{{ character.slug }}/images/file/{{ candidate.relativePath }}" class="w-full h-full object-cover" alt="" />
+                  {% endif %}
+                </button>
+              </form>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
     </div>
 
     <div>

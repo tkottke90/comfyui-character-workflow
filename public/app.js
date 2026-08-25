@@ -224,4 +224,82 @@
       if (file) handleFile(file);
     });
   });
+
+  // ---- Images gallery: client-side badge filter (all tiles are already server-rendered,
+  // so switching badges just toggles visibility rather than reloading the page) ----
+  document.querySelectorAll('[data-gallery-filter]').forEach(function (wrapper) {
+    var tiles = document.querySelectorAll('[data-gallery-tile]');
+    var buttons = wrapper.querySelectorAll('[data-gallery-filter-btn]');
+    var activeClasses = ['bg-apple-600', 'text-white'];
+    var inactiveClasses = [
+      'bg-steel-100',
+      'dark:bg-steel-800',
+      'text-steel-600',
+      'dark:text-steel-300',
+    ];
+
+    var applyFilter = function (value) {
+      tiles.forEach(function (tile) {
+        tile.classList.toggle(
+          'hidden',
+          Boolean(value) && tile.getAttribute('data-source') !== value,
+        );
+      });
+      buttons.forEach(function (btn) {
+        var isActive = (btn.getAttribute('data-gallery-filter-btn') || '') === value;
+        activeClasses.forEach(function (c) {
+          btn.classList.toggle(c, isActive);
+        });
+        inactiveClasses.forEach(function (c) {
+          btn.classList.toggle(c, !isActive);
+        });
+      });
+    };
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        applyFilter(btn.getAttribute('data-gallery-filter-btn') || '');
+      });
+    });
+  });
+
+  // ---- Choose-from-library picker (Refinement/Targeted Fix): toggle the panel, and honor
+  // a gallery "Send to X" hand-off by auto-expanding and highlighting the referenced tile
+  // without committing anything — the user still has to click it. ----
+  document.querySelectorAll('[data-picker-toggle]').forEach(function (btn) {
+    var panel = btn.parentElement ? btn.parentElement.querySelector('[data-picker-panel]') : null;
+    if (!panel) return;
+    btn.addEventListener('click', function () {
+      panel.classList.toggle('hidden');
+    });
+  });
+
+  document.querySelectorAll('[data-picker-panel]').forEach(function (panel) {
+    var highlight = panel.getAttribute('data-highlight');
+    if (!highlight) return;
+
+    var tile = null;
+    panel.querySelectorAll('[data-picker-tile]').forEach(function (candidate) {
+      if (candidate.getAttribute('data-relative-path') === highlight) tile = candidate;
+    });
+    if (!tile) return;
+
+    panel.classList.remove('hidden');
+    tile.classList.add('ring-2', 'ring-apple-500');
+    tile.scrollIntoView({ block: 'nearest' });
+  });
+
+  // ---- Views/Poses landing: "Use this image" fills that card's own Image Path field from
+  // the picked-image banner — no server round-trip, no job submitted. ----
+  var pickedImage = document.querySelector('[data-poses-picked-image]');
+  if (pickedImage) {
+    var pickedRelativePath = pickedImage.getAttribute('data-relative-path') || '';
+    document.querySelectorAll('[data-use-picked-image]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var form = btn.closest('form');
+        var input = form ? form.querySelector('input[name="imagePath"]') : null;
+        if (input) input.value = pickedRelativePath;
+      });
+    });
+  }
 })();
