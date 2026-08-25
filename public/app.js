@@ -1,4 +1,4 @@
-/* global document, FileReader */
+/* global document, FileReader, fetch */
 (function () {
   'use strict';
 
@@ -302,4 +302,29 @@
       });
     });
   }
+
+  // ---- Randomize seed: fetches a fresh random seed from the API and fills the
+  // paired input. Network failure just leaves the field untouched — randomizing
+  // is a convenience, not something that should break the form. ----
+  document.querySelectorAll('[data-randomize-seed]').forEach(function (trigger) {
+    var targetId = trigger.getAttribute('data-randomize-seed');
+    var input = targetId ? document.getElementById(targetId) : null;
+    if (!input) return;
+
+    trigger.addEventListener('click', function () {
+      fetch('/api/v1/random-seed')
+        .then(function (res) {
+          if (!res.ok) throw new Error('random-seed request failed');
+          return res.json();
+        })
+        .then(function (data) {
+          if (data && typeof data.seed === 'number') {
+            input.value = String(data.seed);
+          }
+        })
+        .catch(function () {
+          // no-op: leave the existing seed value as-is
+        });
+    });
+  });
 })();
