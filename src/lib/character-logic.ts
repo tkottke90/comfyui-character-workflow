@@ -237,6 +237,7 @@ export function applyStyleToCharacter(style: StyleRecord): Partial<Character> {
     cfg: style.cfg,
     steps: style.steps,
     styleSourceName: style.name,
+    promptAdapter: style.promptAdapter,
   };
 }
 

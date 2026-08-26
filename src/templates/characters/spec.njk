@@ -89,8 +89,42 @@
         </label>
 
         <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="negativePrompt">Negative guards</label>
-        <textarea id="negativePrompt" name="negativePrompt" rows="3"
+        {% if character.promptAdapter.negativeMode == 'suppressed' %}
+          <p class="text-[12px] text-steel-500 mb-1">Not sent to ComfyUI with this prompt adapter (still stored here).</p>
+        {% endif %}
+        <textarea id="negativePrompt" name="negativePrompt" rows="3" data-spec-field="negativePrompt"
           class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[13px] font-mono mb-5">{{ character.negativePrompt }}</textarea>
+
+        <div class="border-t border-steel-200 dark:border-steel-800 pt-4 mb-5" data-prompt-adapter-fieldset>
+          <h2 class="text-[13px] font-bold uppercase tracking-wider text-steel-500 mb-3">Prompt adapter</h2>
+          <p class="text-[12px] text-steel-500 mb-3">
+            Inherited from the applied Style — hand-edit here if needed. Pick a different Style above to change the family.
+          </p>
+
+          <input type="hidden" name="promptAdapter[presetId]" data-adapter-field="presetId" value="{{ character.promptAdapter.presetId }}" />
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="leadTags">Lead tags</label>
+          <input id="leadTags" name="promptAdapter[leadTags]" data-adapter-field="leadTags" data-spec-field="promptAdapterLeadTags" type="text"
+            value="{{ character.promptAdapter.leadTags }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-3" />
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="qualityTagsPositive">Quality tags (positive)</label>
+          <input id="qualityTagsPositive" name="promptAdapter[qualityTagsPositive]" data-adapter-field="qualityTagsPositive" data-spec-field="promptAdapterQualityTagsPositive" type="text"
+            value="{{ character.promptAdapter.qualityTagsPositive }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-3" />
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="negativeMode">Negative mode</label>
+          <select id="negativeMode" name="promptAdapter[negativeMode]" data-adapter-field="negativeMode" data-spec-field="promptAdapterNegativeMode"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-3">
+            <option value="template" {% if character.promptAdapter.negativeMode == 'template' %}selected{% endif %}>Use negative prompt</option>
+            <option value="suppressed" {% if character.promptAdapter.negativeMode == 'suppressed' %}selected{% endif %}>Suppress negative prompt</option>
+          </select>
+
+          <label class="block text-[13px] font-semibold text-steel-600 dark:text-steel-300 mb-1" for="qualityTagsNegative">Quality tags (negative)</label>
+          <input id="qualityTagsNegative" name="promptAdapter[qualityTagsNegative]" data-adapter-field="qualityTagsNegative" data-spec-field="promptAdapterQualityTagsNegative" type="text"
+            value="{{ character.promptAdapter.qualityTagsNegative }}"
+            class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px]" />
+        </div>
 
         {{ ui.button('Save Character') }}
       {% endcall %}
@@ -126,6 +160,13 @@
 
       {% call ui.card('Identity block · live preview') %}
         <pre data-identity-preview class="whitespace-pre-wrap font-mono text-[12.5px] text-steel-600 dark:text-steel-300">{{ previewIdentityBlock }}</pre>
+      {% endcall %}
+
+      {% call ui.card('Final prompt preview') %}
+        <div class="text-[11px] font-bold uppercase tracking-wider text-steel-400 mb-1">Positive</div>
+        <pre data-prompt-preview-positive class="whitespace-pre-wrap font-mono text-[12.5px] text-steel-600 dark:text-steel-300 mb-3">{{ previewPositivePrompt }}</pre>
+        <div class="text-[11px] font-bold uppercase tracking-wider text-steel-400 mb-1">Negative</div>
+        <pre data-prompt-preview-negative class="whitespace-pre-wrap font-mono text-[12.5px] text-steel-600 dark:text-steel-300">{{ previewNegativePrompt }}</pre>
       {% endcall %}
 
       {% set manualItems = ['features_listed', 'features_verifiable'] %}

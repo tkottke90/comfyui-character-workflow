@@ -27,6 +27,8 @@ import {
   parsePhaseChecklist,
   DEFAULT_NEGATIVE_PROMPT,
 } from '../lib/character-logic';
+import { applyPromptAdapter } from '../lib/prompt-adapter';
+import { PromptAdapterSchema } from '../schemas/prompt-adapter.schema';
 
 const VIEW_DEFINITIONS: Array<{
   key: string;
@@ -390,16 +392,19 @@ export function createCharactersRouter(
       'character-attributes',
       CharacterAttributesConfigSchema,
     );
+    const previewIdentityBlock = compileIdentityBlock(
+      character.name,
+      character.useNameAsToken,
+      character.attributes,
+    );
     res.render('characters/spec.njk', {
       ...baseContext(character),
       templates: templates.list(),
       styles: styles.list(),
       checklistItems: CHECKLIST_DEFINITIONS.specification,
-      previewIdentityBlock: compileIdentityBlock(
-        character.name,
-        character.useNameAsToken,
-        character.attributes,
-      ),
+      previewIdentityBlock,
+      previewPositivePrompt: applyPromptAdapter(previewIdentityBlock, character.promptAdapter, 'positive'),
+      previewNegativePrompt: applyPromptAdapter(character.negativePrompt, character.promptAdapter, 'negative'),
       attributeSuggestions: mergeAttributeSuggestions(
         DEFAULT_ATTRIBUTE_SUGGESTIONS,
         configuredSuggestions,
@@ -417,6 +422,7 @@ export function createCharactersRouter(
 
     const styleSlug = String(req.body.styleSlug ?? '').trim();
     const selectedStyle = styleSlug ? styles.get(styleSlug) : undefined;
+    const promptAdapterInput = req.body.promptAdapter ?? {};
 
     characters.update(character.slug, {
       attributes,
@@ -424,6 +430,13 @@ export function createCharactersRouter(
       body_template: String(req.body.body_template ?? character.body_template),
       identityBlock,
       negativePrompt: String(req.body.negativePrompt ?? '') || DEFAULT_NEGATIVE_PROMPT,
+      promptAdapter: PromptAdapterSchema.parse({
+        presetId: String(promptAdapterInput.presetId ?? ''),
+        leadTags: String(promptAdapterInput.leadTags ?? ''),
+        qualityTagsPositive: String(promptAdapterInput.qualityTagsPositive ?? ''),
+        negativeMode: promptAdapterInput.negativeMode === 'suppressed' ? 'suppressed' : 'template',
+        qualityTagsNegative: String(promptAdapterInput.qualityTagsNegative ?? ''),
+      }),
       ...(selectedStyle ? applyStyleToCharacter(selectedStyle) : {}),
     });
 
