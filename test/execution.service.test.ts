@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { WebSocketServer, WebSocket as WsClient } from 'ws';
 import { createCharactersService } from '../src/services/characters.service';
 import { createCharacterImagesService } from '../src/services/character-images.service';
+import { createTemplatesService } from '../src/services/templates.service';
 import { createWorkflowMappingService } from '../src/services/workflow-mapping.service';
 import { createJobStore } from '../src/services/job-store.service';
 import { createComfyUIClient } from '../src/services/comfyui-client.service';
@@ -58,7 +59,9 @@ async function startStubComfyServer(opts: {
       res.end(
         JSON.stringify({
           [opts.promptId]: {
-            outputs: { '4': { images: [{ filename: 'result.png', subfolder: '', type: 'output' }] } },
+            outputs: {
+              '4': { images: [{ filename: 'result.png', subfolder: '', type: 'output' }] },
+            },
             status: { completed: true, statusStr: 'success' },
           },
         }),
@@ -120,7 +123,9 @@ async function startStubComfyServerMulti(opts: {
       res.end(
         JSON.stringify({
           [promptId]: {
-            outputs: { '4': { images: [{ filename: `${promptId}.png`, subfolder: '', type: 'output' }] } },
+            outputs: {
+              '4': { images: [{ filename: `${promptId}.png`, subfolder: '', type: 'output' }] },
+            },
             status: { completed: true, statusStr: 'success' },
           },
         }),
@@ -199,19 +204,42 @@ describe('execution.service', () => {
     const character = characters.create({ name: 'Rin Takahashi', checkpoint: 'RealVisXL_V5.0' });
 
     const characterImages = createCharacterImagesService(charactersDir);
-    characterImages.storeWorkingFile(character.slug, 'refinement_cleanup', 'image', ONE_PIXEL_PNG_DATA_URL);
-    characterImages.storeWorkingFile(character.slug, 'refinement_cleanup', 'mask', ONE_PIXEL_PNG_DATA_URL);
+    const templatesService = createTemplatesService(path.join(dir, 'templates'));
+    characterImages.storeWorkingFile(
+      character.slug,
+      'refinement_cleanup',
+      'image',
+      ONE_PIXEL_PNG_DATA_URL,
+    );
+    characterImages.storeWorkingFile(
+      character.slug,
+      'refinement_cleanup',
+      'mask',
+      ONE_PIXEL_PNG_DATA_URL,
+    );
 
     const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
     const graph = {
-      '1': { class_type: 'LoadImage', inputs: { image: 'placeholder.png' }, _meta: { title: 'Load Image' } },
-      '2': { class_type: 'LoadImage', inputs: { image: 'placeholder-mask.png' }, _meta: { title: 'Load Mask' } },
+      '1': {
+        class_type: 'LoadImage',
+        inputs: { image: 'placeholder.png' },
+        _meta: { title: 'Load Image' },
+      },
+      '2': {
+        class_type: 'LoadImage',
+        inputs: { image: 'placeholder-mask.png' },
+        _meta: { title: 'Load Mask' },
+      },
       '3': {
         class_type: 'CheckpointLoaderSimple',
         inputs: { ckpt_name: 'placeholder.safetensors' },
         _meta: { title: 'Checkpoint' },
       },
-      '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+      '4': {
+        class_type: 'SaveImage',
+        inputs: { filename_prefix: 'ComfyUI' },
+        _meta: { title: 'Save Image' },
+      },
     };
     const { version } = workflowMapping.importVersion(graph, 'cleanup.json', '003-Cleanup');
     workflowMapping.updateNodeMapping('003-Cleanup', version, '1', 'image', {
@@ -230,7 +258,11 @@ describe('execution.service', () => {
       status: 'mapped',
     });
     workflowMapping.bindPhase('003-Cleanup', version, '003-Cleanup');
-    workflowMapping.setResultOutput('003-Cleanup', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+    workflowMapping.setResultOutput('003-Cleanup', version, {
+      nodeId: '4',
+      outputIndex: 0,
+      label: 'primary_result',
+    });
     workflowMapping.activateVersion('003-Cleanup', version);
 
     const uploadedFilenames: string[] = [];
@@ -260,6 +292,7 @@ describe('execution.service', () => {
         workflowMapping,
         characters,
         characterImages,
+        templates: templatesService,
         comfyClient,
         socket,
         jobStore,
@@ -274,8 +307,12 @@ describe('execution.service', () => {
       expect(uploadedFilenames).to.include(`rin-takahashi-refinement_cleanup-mask.png`);
 
       expect(submittedGraph?.['3'].inputs?.ckpt_name).to.equal('RealVisXL_V5.0');
-      expect(submittedGraph?.['1'].inputs?.image).to.equal('saved-rin-takahashi-refinement_cleanup-image.png');
-      expect(submittedGraph?.['2'].inputs?.image).to.equal('saved-rin-takahashi-refinement_cleanup-mask.png');
+      expect(submittedGraph?.['1'].inputs?.image).to.equal(
+        'saved-rin-takahashi-refinement_cleanup-image.png',
+      );
+      expect(submittedGraph?.['2'].inputs?.image).to.equal(
+        'saved-rin-takahashi-refinement_cleanup-mask.png',
+      );
 
       const queued = jobStore.get(character.slug, 'refinement_cleanup');
       expect(queued?.kind === 'single' && queued.status).to.equal('queued');
@@ -293,9 +330,9 @@ describe('execution.service', () => {
       });
 
       expect(done.resultPath).to.be.a('string');
-      expect(fs.existsSync(path.join(charactersDir, character.slug, done.resultPath as string))).to.equal(
-        true,
-      );
+      expect(
+        fs.existsSync(path.join(charactersDir, character.slug, done.resultPath as string)),
+      ).to.equal(true);
     } finally {
       socket.close();
       await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
@@ -310,14 +347,36 @@ describe('execution.service', () => {
     const character = characters.create({ name: 'Rin Takahashi', checkpoint: 'RealVisXL_V5.0' });
 
     const characterImages = createCharacterImagesService(charactersDir);
-    characterImages.storeWorkingFile(character.slug, 'refinement_cleanup', 'image', ONE_PIXEL_PNG_DATA_URL);
+    const templatesService = createTemplatesService(path.join(dir, 'templates'));
+    characterImages.storeWorkingFile(
+      character.slug,
+      'refinement_cleanup',
+      'image',
+      ONE_PIXEL_PNG_DATA_URL,
+    );
 
     const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
     const graph = {
-      '1': { class_type: 'LoadImage', inputs: { image: 'placeholder.png' }, _meta: { title: 'Load Image' } },
-      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'placeholder positive' }, _meta: { title: 'Positive' } },
-      '3': { class_type: 'CLIPTextEncode', inputs: { text: 'placeholder negative' }, _meta: { title: 'Negative' } },
-      '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+      '1': {
+        class_type: 'LoadImage',
+        inputs: { image: 'placeholder.png' },
+        _meta: { title: 'Load Image' },
+      },
+      '2': {
+        class_type: 'CLIPTextEncode',
+        inputs: { text: 'placeholder positive' },
+        _meta: { title: 'Positive' },
+      },
+      '3': {
+        class_type: 'CLIPTextEncode',
+        inputs: { text: 'placeholder negative' },
+        _meta: { title: 'Negative' },
+      },
+      '4': {
+        class_type: 'SaveImage',
+        inputs: { filename_prefix: 'ComfyUI' },
+        _meta: { title: 'Save Image' },
+      },
     };
     const { version } = workflowMapping.importVersion(graph, 'cleanup.json', '003-Cleanup');
     workflowMapping.updateNodeMapping('003-Cleanup', version, '1', 'image', {
@@ -336,7 +395,11 @@ describe('execution.service', () => {
       status: 'mapped',
     });
     workflowMapping.bindPhase('003-Cleanup', version, '003-Cleanup');
-    workflowMapping.setResultOutput('003-Cleanup', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+    workflowMapping.setResultOutput('003-Cleanup', version, {
+      nodeId: '4',
+      outputIndex: 0,
+      label: 'primary_result',
+    });
     workflowMapping.activateVersion('003-Cleanup', version);
 
     let submittedGraph: Record<string, { inputs?: Record<string, unknown> }> | undefined;
@@ -365,6 +428,7 @@ describe('execution.service', () => {
         workflowMapping,
         characters,
         characterImages,
+        templates: templatesService,
         comfyClient,
         socket,
         jobStore,
@@ -392,14 +456,36 @@ describe('execution.service', () => {
     const character = characters.create({ name: 'Rin Takahashi', checkpoint: 'RealVisXL_V5.0' });
 
     const characterImages = createCharacterImagesService(charactersDir);
-    characterImages.storeWorkingFile(character.slug, 'refinement_cleanup', 'image', ONE_PIXEL_PNG_DATA_URL);
+    const templatesService = createTemplatesService(path.join(dir, 'templates'));
+    characterImages.storeWorkingFile(
+      character.slug,
+      'refinement_cleanup',
+      'image',
+      ONE_PIXEL_PNG_DATA_URL,
+    );
 
     const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
     const graph = {
-      '1': { class_type: 'LoadImage', inputs: { image: 'placeholder.png' }, _meta: { title: 'Load Image' } },
-      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'placeholder positive' }, _meta: { title: 'Positive' } },
-      '3': { class_type: 'CLIPTextEncode', inputs: { text: 'placeholder negative' }, _meta: { title: 'Negative' } },
-      '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+      '1': {
+        class_type: 'LoadImage',
+        inputs: { image: 'placeholder.png' },
+        _meta: { title: 'Load Image' },
+      },
+      '2': {
+        class_type: 'CLIPTextEncode',
+        inputs: { text: 'placeholder positive' },
+        _meta: { title: 'Positive' },
+      },
+      '3': {
+        class_type: 'CLIPTextEncode',
+        inputs: { text: 'placeholder negative' },
+        _meta: { title: 'Negative' },
+      },
+      '4': {
+        class_type: 'SaveImage',
+        inputs: { filename_prefix: 'ComfyUI' },
+        _meta: { title: 'Save Image' },
+      },
     };
     const { version } = workflowMapping.importVersion(graph, 'cleanup.json', '003-Cleanup');
     workflowMapping.updateNodeMapping('003-Cleanup', version, '1', 'image', {
@@ -418,7 +504,11 @@ describe('execution.service', () => {
       status: 'mapped',
     });
     workflowMapping.bindPhase('003-Cleanup', version, '003-Cleanup');
-    workflowMapping.setResultOutput('003-Cleanup', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+    workflowMapping.setResultOutput('003-Cleanup', version, {
+      nodeId: '4',
+      outputIndex: 0,
+      label: 'primary_result',
+    });
     workflowMapping.activateVersion('003-Cleanup', version);
 
     let submittedGraph: Record<string, { inputs?: Record<string, unknown> }> | undefined;
@@ -447,6 +537,7 @@ describe('execution.service', () => {
         workflowMapping,
         characters,
         characterImages,
+        templates: templatesService,
         comfyClient,
         socket,
         jobStore,
@@ -461,7 +552,9 @@ describe('execution.service', () => {
       // when the per-run override is empty.
       await executionService.submitSingle(character.slug, 'refinement_cleanup');
 
-      expect(submittedGraph?.['2'].inputs?.text).to.equal(', plain white background, studio lighting');
+      expect(submittedGraph?.['2'].inputs?.text).to.equal(
+        ', plain white background, studio lighting',
+      );
       expect(submittedGraph?.['3'].inputs?.text).to.equal('');
     } finally {
       socket.close();
@@ -477,13 +570,22 @@ describe('execution.service', () => {
     const character = characters.create({ name: 'Ailsa MacLeod' });
 
     const characterImages = createCharacterImagesService(charactersDir);
+    const templatesService = createTemplatesService(path.join(dir, 'templates'));
     const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
     const graph = {
-      '1': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+      '1': {
+        class_type: 'SaveImage',
+        inputs: { filename_prefix: 'ComfyUI' },
+        _meta: { title: 'Save Image' },
+      },
     };
     const { version } = workflowMapping.importVersion(graph, 'polish.json', '008-Polish');
     workflowMapping.bindPhase('008-Polish', version, '008-Polish');
-    workflowMapping.setResultOutput('008-Polish', version, { nodeId: '1', outputIndex: 0, label: 'primary_result' });
+    workflowMapping.setResultOutput('008-Polish', version, {
+      nodeId: '1',
+      outputIndex: 0,
+      label: 'primary_result',
+    });
     workflowMapping.activateVersion('008-Polish', version);
 
     const httpStub = await startStubComfyServer({
@@ -509,6 +611,7 @@ describe('execution.service', () => {
         workflowMapping,
         characters,
         characterImages,
+        templates: templatesService,
         comfyClient,
         socket,
         jobStore,
@@ -554,10 +657,15 @@ describe('execution.service', () => {
     })!;
 
     const characterImages = createCharacterImagesService(charactersDir);
+    const templatesService = createTemplatesService(path.join(dir, 'templates'));
     const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
     const graph = {
       '1': { class_type: 'KSampler', inputs: { seed: 0 }, _meta: { title: 'KSampler' } },
-      '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+      '4': {
+        class_type: 'SaveImage',
+        inputs: { filename_prefix: 'ComfyUI' },
+        _meta: { title: 'Save Image' },
+      },
     };
     const { version } = workflowMapping.importVersion(graph, 'seed.json', '001-Seed');
     workflowMapping.updateNodeMapping('001-Seed', version, '1', 'seed', {
@@ -566,11 +674,17 @@ describe('execution.service', () => {
       status: 'mapped',
     });
     workflowMapping.bindPhase('001-Seed', version, '001-Seed');
-    workflowMapping.setResultOutput('001-Seed', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+    workflowMapping.setResultOutput('001-Seed', version, {
+      nodeId: '4',
+      outputIndex: 0,
+      label: 'primary_result',
+    });
     workflowMapping.activateVersion('001-Seed', version);
 
-    const submittedGraphs: Array<{ graph: Record<string, { inputs?: Record<string, unknown> }>; promptId: string }> =
-      [];
+    const submittedGraphs: Array<{
+      graph: Record<string, { inputs?: Record<string, unknown> }>;
+      promptId: string;
+    }> = [];
     const httpStub = await startStubComfyServerMulti({
       onUpload: () => undefined,
       onPrompt: (graph, promptId) => {
@@ -595,6 +709,7 @@ describe('execution.service', () => {
         workflowMapping,
         characters,
         characterImages,
+        templates: templatesService,
         comfyClient,
         socket,
         jobStore,
@@ -641,7 +756,9 @@ describe('execution.service', () => {
       const updatedCharacter = characters.get(character.slug);
       const candidate = updatedCharacter?.castingCandidates.find((c) => c.seed === 1001);
       expect(candidate?.imagePath).to.equal(path.join('casting_batch', 'seed-1001.png'));
-      expect(updatedCharacter?.castingCandidates.find((c) => c.seed === 1000)?.imagePath).to.equal('');
+      expect(updatedCharacter?.castingCandidates.find((c) => c.seed === 1000)?.imagePath).to.equal(
+        '',
+      );
     } finally {
       socket.close();
       await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
@@ -653,12 +770,20 @@ describe('execution.service', () => {
   describe('reconcile (restart reconciliation)', () => {
     function setUpPolishMapping(workflowMapping: ReturnType<typeof createWorkflowMappingService>) {
       const graph = {
-        '4': { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI' }, _meta: { title: 'Save Image' } },
+        '4': {
+          class_type: 'SaveImage',
+          inputs: { filename_prefix: 'ComfyUI' },
+          _meta: { title: 'Save Image' },
+        },
       };
       const { version } = workflowMapping.importVersion(graph, 'polish.json', '008-Polish');
       workflowMapping.bindPhase('008-Polish', version, '008-Polish');
       // Node id '4' matches startStubComfyServer's fixed history-entry output key.
-      workflowMapping.setResultOutput('008-Polish', version, { nodeId: '4', outputIndex: 0, label: 'primary_result' });
+      workflowMapping.setResultOutput('008-Polish', version, {
+        nodeId: '4',
+        outputIndex: 0,
+        label: 'primary_result',
+      });
       workflowMapping.activateVersion('008-Polish', version);
     }
 
@@ -667,6 +792,7 @@ describe('execution.service', () => {
       const characters = createCharactersService(charactersDir);
       const character = characters.create({ name: 'Restart Test' });
       const characterImages = createCharacterImagesService(charactersDir);
+      const templatesService = createTemplatesService(path.join(dir, 'templates'));
       const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
       setUpPolishMapping(workflowMapping);
 
@@ -688,7 +814,10 @@ describe('execution.service', () => {
       });
       const wsStub = await startStubWsServer();
       const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
-      const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+      const socket = createComfyUISocket({
+        baseUrl: `http://127.0.0.1:${wsStub.port}`,
+        clientId: 'app-client',
+      });
 
       try {
         const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
@@ -701,6 +830,7 @@ describe('execution.service', () => {
           workflowMapping,
           characters,
           characterImages,
+          templates: templatesService,
           comfyClient,
           socket,
           jobStore,
@@ -731,6 +861,7 @@ describe('execution.service', () => {
       const characters = createCharactersService(charactersDir);
       const character = characters.create({ name: 'Restart Unreachable' });
       const characterImages = createCharacterImagesService(charactersDir);
+      const templatesService = createTemplatesService(path.join(dir, 'templates'));
       const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
       setUpPolishMapping(workflowMapping);
 
@@ -748,7 +879,10 @@ describe('execution.service', () => {
       const wsStub = await startStubWsServer();
       // No HTTP stub server is started at all — every request to it fails outright.
       const comfyClient = createComfyUIClient({ baseUrl: 'http://127.0.0.1:1' });
-      const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+      const socket = createComfyUISocket({
+        baseUrl: `http://127.0.0.1:${wsStub.port}`,
+        clientId: 'app-client',
+      });
 
       try {
         const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
@@ -759,6 +893,7 @@ describe('execution.service', () => {
           workflowMapping,
           characters,
           characterImages,
+          templates: templatesService,
           comfyClient,
           socket,
           jobStore,
@@ -785,6 +920,7 @@ describe('execution.service', () => {
       const characters = createCharactersService(charactersDir);
       const character = characters.create({ name: 'Restart Still Running' });
       const characterImages = createCharacterImagesService(charactersDir);
+      const templatesService = createTemplatesService(path.join(dir, 'templates'));
       const workflowMapping = createWorkflowMappingService(path.join(dir, 'workflows'));
       setUpPolishMapping(workflowMapping);
 
@@ -814,7 +950,9 @@ describe('execution.service', () => {
             historyReady
               ? JSON.stringify({
                   'prompt-restart-inflight': {
-                    outputs: { '4': { images: [{ filename: 'result.png', subfolder: '', type: 'output' }] } },
+                    outputs: {
+                      '4': { images: [{ filename: 'result.png', subfolder: '', type: 'output' }] },
+                    },
                     status: { completed: true, statusStr: 'success' },
                   },
                 })
@@ -837,7 +975,10 @@ describe('execution.service', () => {
       };
       const wsStub = await startStubWsServer();
       const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
-      const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+      const socket = createComfyUISocket({
+        baseUrl: `http://127.0.0.1:${wsStub.port}`,
+        clientId: 'app-client',
+      });
 
       try {
         const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
@@ -848,6 +989,7 @@ describe('execution.service', () => {
           workflowMapping,
           characters,
           characterImages,
+          templates: templatesService,
           comfyClient,
           socket,
           jobStore,
@@ -865,7 +1007,10 @@ describe('execution.service', () => {
         // The prompt actually finishes moments later — this only resolves if reconcile()
         // re-registered promptOwners for it, since that map started empty this run.
         historyReady = true;
-        wsStub.send({ type: 'executing', data: { node: null, prompt_id: 'prompt-restart-inflight' } });
+        wsStub.send({
+          type: 'executing',
+          data: { node: null, prompt_id: 'prompt-restart-inflight' },
+        });
 
         const done = await waitUntil(() => {
           const job = jobStore.get(character.slug, 'polish');

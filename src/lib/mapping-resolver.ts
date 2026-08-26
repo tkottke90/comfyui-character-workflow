@@ -1,7 +1,9 @@
+import path from 'node:path';
 import _ from 'lodash';
 import { NodeMapping, WorkflowVersion } from '../schemas/workflow-mapping.schema';
 import { CharacterRecord } from '../schemas/character.schema';
 import { CharacterImagesService } from '../services/character-images.service';
+import { TemplatesService } from '../services/templates.service';
 import { getWorkflowSlot } from '../comfy/workflow-registry';
 
 export class UnresolvableMappingError extends Error {
@@ -16,10 +18,16 @@ const CURRENT_MASK_PATH = 'stage_input.current_mask';
 const CASTING_SEED_PATH = 'stage_input.casting_seed';
 const CUSTOM_POSITIVE_PROMPT_PATH = 'stage_input.custom_positive_prompt';
 const CUSTOM_NEGATIVE_PROMPT_PATH = 'stage_input.custom_negative_prompt';
+const BODY_TEMPLATE_PATH = 'character.body_template';
 
 export type ResolvedNodeValue =
   | { kind: 'literal'; value: string }
-  | { kind: 'image'; role: 'image' | 'mask'; filePath: string; relativePath: string };
+  | {
+      kind: 'image';
+      role: 'image' | 'mask' | 'body_template';
+      filePath: string;
+      relativePath: string;
+    };
 
 /**
  * Per-invocation values a caller supplies at resolve time, rather than something the
@@ -93,11 +101,46 @@ function resolveCurrentImageOrMask(
   };
 }
 
+/**
+ * `character.body_template` stores the selected template's slug, not a file path —
+ * looked up against the Templates registry (src/services/templates.service.ts) the same
+ * way `current_image`/`current_mask` look up character-images storage. Fails loudly
+ * (rather than falling through to the generic literal path, which would splice the raw
+ * slug string into the node input and get ComfyUI to reject the whole submission with a
+ * 400) on no template selected, an unknown slug, or a template with no image uploaded.
+ */
+function resolveBodyTemplate(
+  character: CharacterRecord,
+  templates: TemplatesService,
+): ResolvedNodeValue {
+  if (!character.body_template) {
+    throw new UnresolvableMappingError('No body template selected for this character');
+  }
+
+  const template = templates.get(character.body_template);
+  if (!template) {
+    throw new UnresolvableMappingError(
+      `Body template "${character.body_template}" no longer exists`,
+    );
+  }
+  if (!template.filename) {
+    throw new UnresolvableMappingError(`Body template "${template.name}" has no image uploaded`);
+  }
+
+  return {
+    kind: 'image',
+    role: 'body_template',
+    filePath: path.join(templates.uploadsDir, template.filename),
+    relativePath: template.filename,
+  };
+}
+
 function resolveDomainField(
   sourceValue: string,
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
+  templates: TemplatesService,
   context: ResolutionContext,
 ): ResolvedNodeValue {
   if (sourceValue === CURRENT_IMAGE_PATH) {
@@ -105,6 +148,9 @@ function resolveDomainField(
   }
   if (sourceValue === CURRENT_MASK_PATH) {
     return resolveCurrentImageOrMask('mask', version, character, characterImages);
+  }
+  if (sourceValue === BODY_TEMPLATE_PATH) {
+    return resolveBodyTemplate(character, templates);
   }
   if (sourceValue === CASTING_SEED_PATH) {
     if (context.castingSeed === undefined) {
@@ -141,6 +187,7 @@ function resolveNode(
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
+  templates: TemplatesService,
   context: ResolutionContext,
 ): ResolvedNodeValue {
   if (node.sourceType === 'static') {
@@ -148,7 +195,14 @@ function resolveNode(
   }
 
   if (node.sourceType === 'domain') {
-    return resolveDomainField(node.sourceValue, version, character, characterImages, context);
+    return resolveDomainField(
+      node.sourceValue,
+      version,
+      character,
+      characterImages,
+      templates,
+      context,
+    );
   }
 
   // 'computed' is deferred (removed from the mapping editor, but the schema still allows
@@ -172,6 +226,7 @@ export function resolveMapping(
   version: WorkflowVersion,
   character: CharacterRecord,
   characterImages: CharacterImagesService,
+  templates: TemplatesService,
   context: ResolutionContext = {},
 ): ResolvedMapping[] {
   return version.nodes
@@ -181,6 +236,6 @@ export function resolveMapping(
       inputName: node.inputName,
       classType: node.classType,
       sourceValue: node.sourceValue,
-      resolved: resolveNode(node, version, character, characterImages, context),
+      resolved: resolveNode(node, version, character, characterImages, templates, context),
     }));
 }

@@ -59,6 +59,7 @@ export function createViews(app: Application) {
     workflowMapping: workflowMappingService,
     characters: charactersService,
     characterImages: characterImagesService,
+    templates: templatesService,
     comfyClient,
     socket: comfySocket,
     jobStore,

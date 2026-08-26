@@ -15,7 +15,7 @@ function makeCharacter(slug: string, body_template: string): CharacterRecord {
 }
 
 describe('findCharactersUsingTemplate', () => {
-  it('finds every character referencing the template by name', () => {
+  it('finds every character referencing the template by slug', () => {
     const characters = [
       makeCharacter('kwame-asante', 'inverted-triangle'),
       makeCharacter('marguerite-dubois', 'inverted-triangle'),
