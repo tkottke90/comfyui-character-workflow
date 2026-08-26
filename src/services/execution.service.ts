@@ -19,6 +19,7 @@ import { ComfyUIClient } from './comfyui-client.service';
 import { ComfyUISocket } from './comfyui-socket.service';
 import { BatchSubJob, JobError, JobStore, SingleJobRecord } from './job-store.service';
 import { PhasePromptConfig } from '../schemas/config.schema';
+import { applyPromptAdapter } from '../lib/prompt-adapter';
 
 interface RawComfyNode {
   class_type?: string;
@@ -110,6 +111,11 @@ const POSITIVE_PROMPT_SOURCE_VALUES = new Set([
   'character.identityBlockFrozen',
   'stage_input.custom_positive_prompt',
 ]);
+
+/** Domain fields treated as "the negative prompt" for Prompt Adapter wrapping —
+ *  see PromptAdapterSchema. Wrapped independently of the phase-prompt prefix/suffix
+ *  above, which stays positive-only. */
+const NEGATIVE_PROMPT_SOURCE_VALUES = new Set(['character.negativePrompt']);
 
 export function createExecutionService(config: ExecutionServiceConfig): ExecutionService {
   const {
@@ -452,16 +458,22 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
         // still be spliced in as a string.
         let value = mapping.resolved.value;
 
-        // Phase-configured positive-prompt prefix/suffix (config.schema.ts's 'phase-prompt'
-        // section) — plain concatenation, no auto-inserted separator, so the config string
-        // carries its own leading/trailing punctuation. Applies even to an empty
+        // Prompt Adapter wrapping (schemas/prompt-adapter.schema.ts) runs first, so a
+        // model family's lead/quality tags sit innermost — then the phase-configured
+        // positive-prompt prefix/suffix (config.schema.ts's 'phase-prompt' section) wraps
+        // around that, plain concatenation, no auto-inserted separator, so the config
+        // string carries its own leading/trailing punctuation. Applies even to an empty
         // custom_positive_prompt (a legitimate "no override this run" value) so a phase's
         // suffix (e.g. an image-edit "keep the same character" instruction) always lands.
         if (POSITIVE_PROMPT_SOURCE_VALUES.has(mapping.sourceValue)) {
+          value = applyPromptAdapter(value, character.promptAdapter, 'positive');
+
           const phrasing = phasePromptConfig[phaseBindingKey];
           if (phrasing) {
             value = `${phrasing.prefix}${value}${phrasing.suffix}`;
           }
+        } else if (NEGATIVE_PROMPT_SOURCE_VALUES.has(mapping.sourceValue)) {
+          value = applyPromptAdapter(value, character.promptAdapter, 'negative');
         }
 
         node.inputs[mapping.inputName] = value;

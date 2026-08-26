@@ -1,6 +1,8 @@
 import { LoggerConfigSchema } from '@tkottke90/logger';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { PromptAdapterPresetSchema } from './prompt-adapter.schema';
+import { DEFAULT_PROMPT_ADAPTER_PRESETS } from '../lib/prompt-adapter-defaults';
 
 export const ComfyUiConfigSchema = z.object({
   baseUrl: z.string().default('localhost:40000'),
@@ -21,6 +23,15 @@ export const PhasePromptConfigSchema = z
   .default({});
 export type PhasePromptConfig = z.infer<typeof PhasePromptConfigSchema>;
 
+/** Editable registry of Prompt Adapter presets, keyed by id — see PromptAdapterSchema
+ *  (schemas/prompt-adapter.schema.ts). Seeded in full from DEFAULT_PROMPT_ADAPTER_PRESETS
+ *  on first boot; from then on this section of config.yaml is authoritative and can be
+ *  hand-edited (add/remove/rename entries) without a code change. */
+export const PromptAdapterPresetsConfigSchema = z
+  .record(z.string(), PromptAdapterPresetSchema)
+  .default(() => DEFAULT_PROMPT_ADAPTER_PRESETS);
+export type PromptAdapterPresetsConfig = z.infer<typeof PromptAdapterPresetsConfigSchema>;
+
 export const ConfigSchema = z.object({
   port: z.number().default(3000),
   host: z.string().default('localhost'),
@@ -32,5 +43,6 @@ export const ConfigSchema = z.object({
   }),
   'comfy-ui': ComfyUiConfigSchema.default(() => ComfyUiConfigSchema.parse({})),
   'character-attributes': CharacterAttributesConfigSchema,
-  'phase-prompt': PhasePromptConfigSchema
+  'phase-prompt': PhasePromptConfigSchema,
+  'prompt-adapter-presets': PromptAdapterPresetsConfigSchema
 });

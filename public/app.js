@@ -1,4 +1,4 @@
-/* global document, FileReader, fetch */
+/* global document, FileReader, fetch, Event */
 (function () {
   'use strict';
 
@@ -44,12 +44,28 @@
   if (previewEl) {
     var form = previewEl.closest('form') || document;
     var fields = form.querySelectorAll('[data-spec-field]');
+    var positivePreviewEl = document.querySelector('[data-prompt-preview-positive]');
+    var negativePreviewEl = document.querySelector('[data-prompt-preview-negative]');
 
     var genderNoun = function (sex) {
       var value = (sex || '').trim().toLowerCase();
       if (value === 'male') return 'man';
       if (value === 'female') return 'woman';
       return value || 'person';
+    };
+
+    // Mirrors src/lib/prompt-adapter.ts's applyPromptAdapter() — keep in lockstep.
+    var applyPromptAdapterJs = function (value, adapter, kind) {
+      if (kind === 'negative' && adapter.negativeMode === 'suppressed') return '';
+      var segments =
+        kind === 'positive'
+          ? [adapter.leadTags, adapter.qualityTagsPositive, value]
+          : [adapter.qualityTagsNegative, value];
+      return segments
+        .filter(function (s) {
+          return s && s.trim().length > 0;
+        })
+        .join(', ');
     };
 
     var recompute = function () {
@@ -85,6 +101,21 @@
       });
 
       previewEl.textContent = [subject].concat(parts).join(', ').toLowerCase();
+
+      if (positivePreviewEl || negativePreviewEl) {
+        var adapter = {
+          leadTags: get('promptAdapterLeadTags'),
+          qualityTagsPositive: get('promptAdapterQualityTagsPositive'),
+          negativeMode: get('promptAdapterNegativeMode') || 'template',
+          qualityTagsNegative: get('promptAdapterQualityTagsNegative'),
+        };
+        if (positivePreviewEl) {
+          positivePreviewEl.textContent = applyPromptAdapterJs(previewEl.textContent, adapter, 'positive');
+        }
+        if (negativePreviewEl) {
+          negativePreviewEl.textContent = applyPromptAdapterJs(get('negativePrompt'), adapter, 'negative');
+        }
+      }
     };
 
     fields.forEach(function (field) {
@@ -348,4 +379,32 @@
       if (event.key === 'Escape') setSubnavOpen(false);
     });
   }
+
+  // ---- Prompt Adapter: picking a preset fills the 4 editable fields (Style form and
+  // Character spec builder both use this same fieldset shape) ----
+  document.querySelectorAll('[data-preset-select]').forEach(function (select) {
+    var presets = {};
+    try {
+      presets = JSON.parse(select.getAttribute('data-presets') || '{}');
+    } catch {
+      presets = {};
+    }
+    var fieldset = select.closest('[data-prompt-adapter-fieldset]') || select.closest('form') || document;
+
+    select.addEventListener('change', function () {
+      var preset = presets[select.value];
+      if (!preset) return;
+
+      ['leadTags', 'qualityTagsPositive', 'negativeMode', 'qualityTagsNegative'].forEach(function (key) {
+        var field = fieldset.querySelector('[data-adapter-field="' + key + '"]');
+        if (!field) return;
+        field.value = preset[key] || (key === 'negativeMode' ? 'template' : '');
+        field.dispatchEvent(new Event('input'));
+        field.dispatchEvent(new Event('change'));
+      });
+
+      var presetIdField = fieldset.querySelector('[data-adapter-field="presetId"]');
+      if (presetIdField) presetIdField.value = select.value;
+    });
+  });
 })();

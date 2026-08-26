@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PromptAdapterSchema } from './prompt-adapter.schema';
 
 export const StyleSchema = z.object({
   name: z.string().min(1),
@@ -10,6 +11,7 @@ export const StyleSchema = z.object({
   cfg: z.number().min(1).max(20),
   steps: z.number().min(1).max(100),
   createdAt: z.string(),
+  promptAdapter: PromptAdapterSchema.default(() => PromptAdapterSchema.parse({})),
 });
 export type Style = z.infer<typeof StyleSchema>;
 

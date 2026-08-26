@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PromptAdapterSchema } from './prompt-adapter.schema';
 
 export const CharacterStatusSchema = z.enum([
   'draft',
@@ -161,6 +162,7 @@ export const CharacterSchema = z.object({
   identityBlock: z.string().default(''),
   identityBlockFrozen: z.boolean().default(false),
   negativePrompt: z.string().default(''),
+  promptAdapter: PromptAdapterSchema.default(() => PromptAdapterSchema.parse({})),
 
   checklist: z.record(z.string(), z.boolean()).default(() => ({})),
 

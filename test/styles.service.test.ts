@@ -81,4 +81,41 @@ describe('styles.service', () => {
     const service = createStylesService(dir);
     expect(() => service.create({ name: 'Too Many Steps', ...BASE_INPUT, steps: 150 })).to.throw();
   });
+
+  it('defaults promptAdapter to empty/template when not provided', () => {
+    const service = createStylesService(dir);
+    const record = service.create({ name: 'Plain Style', ...BASE_INPUT });
+
+    expect(record.promptAdapter).to.deep.equal({
+      presetId: '',
+      leadTags: '',
+      qualityTagsPositive: '',
+      negativeMode: 'template',
+      qualityTagsNegative: '',
+    });
+  });
+
+  it('round-trips a promptAdapter patch through update', () => {
+    const service = createStylesService(dir);
+    service.create({ name: 'Anime Style', ...BASE_INPUT });
+
+    const updated = service.update('anime-style', {
+      promptAdapter: {
+        presetId: 'illustrious',
+        leadTags: '1girl',
+        qualityTagsPositive: 'masterpiece, best quality',
+        negativeMode: 'template',
+        qualityTagsNegative: 'worst quality, low quality',
+      },
+    });
+
+    expect(updated?.promptAdapter).to.deep.equal({
+      presetId: 'illustrious',
+      leadTags: '1girl',
+      qualityTagsPositive: 'masterpiece, best quality',
+      negativeMode: 'template',
+      qualityTagsNegative: 'worst quality, low quality',
+    });
+    expect(service.get('anime-style')?.promptAdapter.leadTags).to.equal('1girl');
+  });
 });

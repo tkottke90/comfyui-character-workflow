@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Application } from '../types/application';
-import { ComfyUiConfigSchema } from '../schemas/config.schema';
+import { ComfyUiConfigSchema, PromptAdapterPresetsConfigSchema } from '../schemas/config.schema';
 import {
   createComfyUIClient,
   getObjectInfoChoices,
@@ -45,9 +45,15 @@ export function createStylesRouter(app: Application, styles: StylesService): Rou
     };
   }
 
+  function loadPromptAdapterPresets() {
+    return app.config.loadConfig('prompt-adapter-presets', PromptAdapterPresetsConfigSchema);
+  }
+
   function readStyleInput(req: Request) {
     const name = String(req.body.name ?? '').trim();
     if (!name) throw new BadRequestError('A style name is required');
+
+    const promptAdapter = req.body.promptAdapter ?? {};
 
     return {
       name,
@@ -58,6 +64,15 @@ export function createStylesRouter(app: Application, styles: StylesService): Rou
       scheduler: String(req.body.scheduler ?? ''),
       cfg: Number(req.body.cfg ?? 5),
       steps: Number(req.body.steps ?? 28),
+      promptAdapter: {
+        presetId: String(promptAdapter.presetId ?? ''),
+        leadTags: String(promptAdapter.leadTags ?? ''),
+        qualityTagsPositive: String(promptAdapter.qualityTagsPositive ?? ''),
+        negativeMode: (promptAdapter.negativeMode === 'suppressed' ? 'suppressed' : 'template') as
+          | 'template'
+          | 'suppressed',
+        qualityTagsNegative: String(promptAdapter.qualityTagsNegative ?? ''),
+      },
     };
   }
 
@@ -66,7 +81,11 @@ export function createStylesRouter(app: Application, styles: StylesService): Rou
   });
 
   router.get('/new', async (_req: Request, res: Response) => {
-    res.render('styles/form.njk', { style: undefined, ...(await loadChoices()) });
+    res.render('styles/form.njk', {
+      style: undefined,
+      ...(await loadChoices()),
+      promptAdapterPresets: loadPromptAdapterPresets(),
+    });
   });
 
   router.post('/', (req: Request, res: Response) => {
@@ -79,7 +98,11 @@ export function createStylesRouter(app: Application, styles: StylesService): Rou
     const style = styles.get(slug);
     if (!style) throw new NotFoundError(`Style "${slug}" not found`);
 
-    res.render('styles/form.njk', { style, ...(await loadChoices()) });
+    res.render('styles/form.njk', {
+      style,
+      ...(await loadChoices()),
+      promptAdapterPresets: loadPromptAdapterPresets(),
+    });
   });
 
   router.post('/:slug', (req: Request, res: Response) => {

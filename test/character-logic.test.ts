@@ -372,6 +372,40 @@ describe('applyStyleToCharacter', () => {
       cfg: 6,
       steps: 30,
       styleSourceName: 'Cinematic Portrait',
+      promptAdapter: {
+        presetId: '',
+        leadTags: '',
+        qualityTagsPositive: '',
+        negativeMode: 'template',
+        qualityTagsNegative: '',
+      },
+    });
+  });
+
+  it('copies a non-default promptAdapter onto the character overlay fields', () => {
+    const style = StyleSchema.parse({
+      name: 'Illustrious Anime',
+      checkpoint: 'illustriousXL_v1',
+      sampler: 'euler_a',
+      scheduler: 'normal',
+      cfg: 6,
+      steps: 28,
+      createdAt: '2026-08-25',
+      promptAdapter: {
+        presetId: 'illustrious',
+        leadTags: '1girl',
+        qualityTagsPositive: 'masterpiece, best quality, amazing quality',
+        negativeMode: 'template',
+        qualityTagsNegative: 'worst quality, low quality',
+      },
+    });
+
+    expect(applyStyleToCharacter({ slug: 'illustrious-anime', ...style }).promptAdapter).to.deep.equal({
+      presetId: 'illustrious',
+      leadTags: '1girl',
+      qualityTagsPositive: 'masterpiece, best quality, amazing quality',
+      negativeMode: 'template',
+      qualityTagsNegative: 'worst quality, low quality',
     });
   });
 });

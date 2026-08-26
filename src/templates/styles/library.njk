@@ -30,6 +30,9 @@
             {% if style.description %}<div class="text-[12px] text-steel-500">{{ style.description }}</div>{% endif %}
           </div>
           <div class="font-mono text-[12.5px] text-steel-500 truncate">{{ style.checkpoint }} · {{ style.sampler }} · {{ style.scheduler }} · {{ style.steps }} steps · cfg {{ style.cfg }}</div>
+          {% if style.promptAdapter.presetId or style.promptAdapter.negativeMode == 'suppressed' %}
+            <div class="text-[11.5px] text-steel-400 truncate">{{ style.promptAdapter.presetId or 'custom' }} · negatives: {{ style.promptAdapter.negativeMode }}</div>
+          {% endif %}
           <div class="text-right text-steel-400">&rsaquo;</div>
         </a>
       {% endfor %}
