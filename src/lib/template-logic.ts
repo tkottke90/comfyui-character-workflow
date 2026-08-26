@@ -2,7 +2,7 @@ import type { CharacterRecord } from '../schemas/character.schema';
 
 export function findCharactersUsingTemplate(
   characters: CharacterRecord[],
-  templateName: string,
+  templateSlug: string,
 ): CharacterRecord[] {
-  return characters.filter((character) => character.body_template === templateName);
+  return characters.filter((character) => character.body_template === templateSlug);
 }

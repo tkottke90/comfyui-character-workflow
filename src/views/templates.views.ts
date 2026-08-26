@@ -19,7 +19,7 @@ export function createTemplatesRouter(
     const allCharacters = characters.list();
     const items = templates.list().map((template) => ({
       template,
-      usageCount: findCharactersUsingTemplate(allCharacters, template.name).length,
+      usageCount: findCharactersUsingTemplate(allCharacters, template.slug).length,
     }));
     res.render('templates/library.njk', { items });
   });
@@ -47,7 +47,7 @@ export function createTemplatesRouter(
     const template = templates.get(slug);
     if (!template) throw new NotFoundError(`Template "${slug}" not found`);
 
-    const usedBy = findCharactersUsingTemplate(characters.list(), template.name);
+    const usedBy = findCharactersUsingTemplate(characters.list(), template.slug);
     res.render('templates/detail.njk', { template, usedBy });
   });
 

@@ -5,13 +5,16 @@ export interface DomainField {
 }
 
 /**
- * The two domain-field paths that only make sense mapped onto a ComfyUI node input
- * ComfyUI itself flags `image_upload: true` (e.g. LoadImage.image) — used by the mapping
- * editor to hide them on every other kind of input, rather than offering them everywhere.
+ * The domain-field paths that only make sense mapped onto a ComfyUI node input ComfyUI
+ * itself flags `image_upload: true` (e.g. LoadImage.image) — used by the mapping editor to
+ * hide them on every other kind of input, rather than offering them everywhere.
+ * `character.body_template` resolves to the selected Template's uploaded image (see
+ * resolveBodyTemplate in mapping-resolver.ts), not a scalar value, so it belongs here too.
  */
 export const IMAGE_DOMAIN_FIELD_PATHS = new Set([
   'stage_input.current_image',
   'stage_input.current_mask',
+  'character.body_template',
 ]);
 
 /**

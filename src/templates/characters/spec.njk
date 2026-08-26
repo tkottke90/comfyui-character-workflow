@@ -48,7 +48,7 @@
         <select id="body_template" name="body_template" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-3 py-2 text-[14px] mb-5">
           <option value="">— none —</option>
           {% for template in templates %}
-            <option value="{{ template.name }}" {% if character.body_template == template.name %}selected{% endif %}>{{ template.name }}</option>
+            <option value="{{ template.slug }}" {% if character.body_template == template.slug %}selected{% endif %}>{{ template.name }}</option>
           {% endfor %}
         </select>
 

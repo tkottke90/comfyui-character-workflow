@@ -2,11 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { allPhaseBindings } from '../comfy/workflow-registry';
 import { activeVersion } from '../lib/workflow-mapping-logic';
-import { resolveMapping, ResolutionContext, UnresolvableMappingError } from '../lib/mapping-resolver';
+import {
+  resolveMapping,
+  ResolutionContext,
+  UnresolvableMappingError,
+} from '../lib/mapping-resolver';
 import { sanitizeSegment } from '../lib/path-sanitize';
 import { NotFoundError, BadRequestError } from '../errors/http.errors';
 import { CharactersService } from './characters.service';
 import { CharacterImagesService } from './character-images.service';
+import { TemplatesService } from './templates.service';
 import { WorkflowMappingService } from './workflow-mapping.service';
 import { CharacterRecord } from '../schemas/character.schema';
 import { WorkflowVersion } from '../schemas/workflow-mapping.schema';
@@ -26,6 +31,7 @@ export interface ExecutionServiceConfig {
   workflowMapping: WorkflowMappingService;
   characters: CharactersService;
   characterImages: CharacterImagesService;
+  templates: TemplatesService;
   comfyClient: ComfyUIClient;
   socket: ComfyUISocket;
   jobStore: JobStore;
@@ -61,7 +67,11 @@ export interface ExecutionService {
   ): Promise<SubmitResult>;
   /** N independent /prompt submissions (startSeed + i), never one batched EmptyLatentImage
    *  call — see design doc §6. Always targets the 'casting_batch' phase binding. */
-  submitCastingBatch(characterSlug: string, startSeed: number, count: number): Promise<SubmitBatchResult>;
+  submitCastingBatch(
+    characterSlug: string,
+    startSeed: number,
+    count: number,
+  ): Promise<SubmitBatchResult>;
   /** Call once at process start, after the socket has been told to connect() — every job
    *  left 'queued'/'running' in the store belongs to a promptOwners entry that died with
    *  the previous process. Checks each one against /history: already completed there gets
@@ -106,6 +116,7 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     workflowMapping,
     characters,
     characterImages,
+    templates,
     comfyClient,
     socket,
     jobStore,
@@ -153,7 +164,14 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     if (seed === undefined) return;
     const subJob = record.subJobs.find((s) => s.seed === seed && s.promptId === promptId);
     if (!subJob) return;
-    await handleBatchSubJobMessage(characterSlug, phaseBindingKey, promptId, record, subJob, message);
+    await handleBatchSubJobMessage(
+      characterSlug,
+      phaseBindingKey,
+      promptId,
+      record,
+      subJob,
+      message,
+    );
   }
 
   async function handleSingleMessage(
@@ -228,7 +246,9 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     }
   }
 
-  function parseProgress(data: Record<string, unknown>): { value: number; max: number } | undefined {
+  function parseProgress(
+    data: Record<string, unknown>,
+  ): { value: number; max: number } | undefined {
     const value = Number(data.value);
     const max = Number(data.max);
     return Number.isFinite(value) && Number.isFinite(max) ? { value, max } : undefined;
@@ -272,13 +292,21 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
         await jobStore.set(characterSlug, phaseBindingKey, {
           ...record,
           status: 'error',
-          error: { kind: 'execution', message: 'ComfyUI reported completion but no result image was found' },
+          error: {
+            kind: 'execution',
+            message: 'ComfyUI reported completion but no result image was found',
+          },
         });
         return;
       }
 
       const dataUrl = `data:image/png;base64,${bytes.toString('base64')}`;
-      const stored = characterImages.storeWorkingFile(characterSlug, phaseBindingKey, 'image', dataUrl);
+      const stored = characterImages.storeWorkingFile(
+        characterSlug,
+        phaseBindingKey,
+        'image',
+        dataUrl,
+      );
 
       await jobStore.set(characterSlug, phaseBindingKey, {
         ...record,
@@ -289,7 +317,10 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
       await jobStore.set(characterSlug, phaseBindingKey, {
         ...record,
         status: 'error',
-        error: { kind: 'connection', message: err instanceof Error ? err.message : 'Unknown error' },
+        error: {
+          kind: 'connection',
+          message: err instanceof Error ? err.message : 'Unknown error',
+        },
       });
     }
   }
@@ -314,7 +345,10 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
           phaseBindingKey,
           replaceSubJob({
             status: 'error',
-            error: { kind: 'execution', message: 'ComfyUI reported completion but no result image was found' },
+            error: {
+              kind: 'execution',
+              message: 'ComfyUI reported completion but no result image was found',
+            },
           }),
         );
         return;
@@ -335,20 +369,30 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
         });
       }
 
-      await jobStore.set(characterSlug, phaseBindingKey, replaceSubJob({ status: 'done', resultPath: relativePath }));
+      await jobStore.set(
+        characterSlug,
+        phaseBindingKey,
+        replaceSubJob({ status: 'done', resultPath: relativePath }),
+      );
     } catch (err) {
       await jobStore.set(
         characterSlug,
         phaseBindingKey,
         replaceSubJob({
           status: 'error',
-          error: { kind: 'connection', message: err instanceof Error ? err.message : 'Unknown error' },
+          error: {
+            kind: 'connection',
+            message: err instanceof Error ? err.message : 'Unknown error',
+          },
         }),
       );
     }
   }
 
-  function getActiveVersionOrThrow(phaseBindingKey: string): { slotId: string; version: WorkflowVersion } {
+  function getActiveVersionOrThrow(phaseBindingKey: string): {
+    slotId: string;
+    version: WorkflowVersion;
+  } {
     const slotId = slotIdForPhaseBinding(phaseBindingKey);
     const mappingRecord = workflowMapping.get(slotId);
     const version = mappingRecord && activeVersion(mappingRecord);
@@ -372,12 +416,14 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     phaseBindingKey: string,
     context: ResolutionContext,
   ): Promise<RawComfyGraph> {
-    const rawGraph = workflowMapping.getRawGraph(slotId, version.version) as RawComfyGraph | undefined;
-    if (!rawGraph) throw new BadRequestError(`No stored workflow graph for "${slotId}" v${version.version}`);
+    const rawGraph = workflowMapping.getRawGraph(slotId, version.version) as
+      RawComfyGraph | undefined;
+    if (!rawGraph)
+      throw new BadRequestError(`No stored workflow graph for "${slotId}" v${version.version}`);
 
     let resolved;
     try {
-      resolved = resolveMapping(version, character, characterImages, context);
+      resolved = resolveMapping(version, character, characterImages, templates, context);
     } catch (err) {
       if (err instanceof UnresolvableMappingError) throw new BadRequestError(err.message);
       throw err;
@@ -393,7 +439,9 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
       if (mapping.resolved.kind === 'image') {
         const filename = `${sanitizeSegment(character.slug)}-${sanitizeSegment(phaseBindingKey)}-${sanitizeSegment(mapping.resolved.role)}${path.extname(mapping.resolved.filePath)}`;
         const buffer = fs.readFileSync(mapping.resolved.filePath);
-        const uploaded = await comfyClient.uploadImage(buffer, filename, 'input', { overwrite: true });
+        const uploaded = await comfyClient.uploadImage(buffer, filename, 'input', {
+          overwrite: true,
+        });
         node.inputs[mapping.inputName] = uploaded.subfolder
           ? `${uploaded.subfolder}/${uploaded.name}`
           : uploaded.name;
@@ -471,12 +519,21 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     // the already-submitted candidates correctly tracked, not silently lost.
     for (let i = 0; i < count; i += 1) {
       const seed = startSeed + i;
-      const graph = await buildGraph(slotId, version, character, phaseBindingKey, { castingSeed: seed });
+      const graph = await buildGraph(slotId, version, character, phaseBindingKey, {
+        castingSeed: seed,
+      });
       const { promptId } = await comfyClient.submitPrompt(graph, clientId);
 
       promptOwners.set(promptId, { characterSlug, phaseBindingKey, seed });
       promptIds.push(promptId);
-      subJobs.push({ seed, promptId, status: 'queued', progress: null, resultPath: null, error: null });
+      subJobs.push({
+        seed,
+        promptId,
+        status: 'queued',
+        progress: null,
+        resultPath: null,
+        error: null,
+      });
 
       await jobStore.set(characterSlug, phaseBindingKey, {
         kind: 'batch',
@@ -538,7 +595,8 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
                 status: 'error' as const,
                 error: {
                   kind: 'connection' as const,
-                  message: err instanceof Error ? err.message : 'Could not reach ComfyUI after a restart',
+                  message:
+                    err instanceof Error ? err.message : 'Could not reach ComfyUI after a restart',
                 },
               }
             : s,
@@ -548,7 +606,13 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
     }
 
     if (historyEntry) {
-      await completeBatchSubJob(characterSlug, phaseBindingKey, subJob.promptId, subJob.seed, record);
+      await completeBatchSubJob(
+        characterSlug,
+        phaseBindingKey,
+        subJob.promptId,
+        subJob.seed,
+        record,
+      );
       return;
     }
 
@@ -570,7 +634,11 @@ export function createExecutionService(config: ExecutionServiceConfig): Executio
         const latest = jobStore.get(characterSlug, phaseBindingKey);
         if (latest?.kind !== 'batch') continue;
         const latestSubJob = latest.subJobs.find((s) => s.promptId === subJob.promptId);
-        if (!latestSubJob || (latestSubJob.status !== 'queued' && latestSubJob.status !== 'running')) continue;
+        if (
+          !latestSubJob ||
+          (latestSubJob.status !== 'queued' && latestSubJob.status !== 'running')
+        )
+          continue;
         await reconcileBatchSubJob(characterSlug, phaseBindingKey, latest, latestSubJob);
       }
     }
