@@ -551,6 +551,21 @@ export function createCharactersRouter(
     res.redirect(`/characters/${character.slug}/casting/winner-audit`);
   });
 
+  router.post('/:slug/casting/candidates/:seed/delete', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const seed = Number(param(req, 'seed'));
+    const candidate = character.castingCandidates.find((c) => c.seed === seed);
+
+    if (candidate && candidate.imagePath && seed !== character.winnerCandidateSeed) {
+      characterImages.deleteCastingCandidate(character.slug, seed);
+      characters.update(character.slug, {
+        castingCandidates: character.castingCandidates.filter((c) => c.seed !== seed),
+      });
+    }
+
+    res.redirect(`/characters/${character.slug}/casting/batch`);
+  });
+
   // ---- Casting: winner audit + lock ----
 
   router.get('/:slug/casting/winner-audit', (req: Request, res: Response) => {

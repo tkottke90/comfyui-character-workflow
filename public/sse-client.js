@@ -23,6 +23,8 @@
   //   <div data-casting-tile data-seed="<seed>">
   //     <img data-tile-image> or <div data-tile-placeholder> (whichever the page rendered)
   //     <div data-tile-status></div>
+  //     <span data-tile-delete> (server-rendered hidden until the candidate has an image;
+  //       unhidden client-side on 'done')
   //   </div>
 
   function patchBatchTiles(root, job) {
@@ -60,6 +62,11 @@
           newImg.className = placeholder.className;
           placeholder.replaceWith(newImg);
         }
+      }
+
+      if (sub.status === 'done') {
+        var deleteEl = tile.querySelector('[data-tile-delete]');
+        if (deleteEl) deleteEl.classList.remove('hidden');
       }
     });
 

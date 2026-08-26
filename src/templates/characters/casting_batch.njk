@@ -69,6 +69,12 @@
                 <form method="post" action="/characters/{{ character.slug }}/casting/candidates/{{ candidate.seed }}/select" class="mt-1.5">
                   <button type="submit" class="text-[12px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Select as winner</button>
                 </form>
+                <span data-tile-delete class="{{ '' if candidate.imagePath else 'hidden' }}">
+                  <form method="post" action="/characters/{{ character.slug }}/casting/candidates/{{ candidate.seed }}/delete"
+                    onsubmit="return confirm('Delete this candidate? This cannot be undone.');" class="mt-1">
+                    <button type="submit" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
+                  </form>
+                </span>
               {% endif %}
             </div>
           </div>
