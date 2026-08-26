@@ -1,8 +1,10 @@
 {% extends "layout.njk" %}
 {% set section = "characters" %}
+{% set subsection = "casting" %}
 {% import "macros.njk" as ui %}
 {% block content %}
   {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Winner Audit'}]) }}
+  {% include "partials/character-subnav.njk" %}
   <div class="flex items-center gap-3 mb-1">
     <h1 class="text-xl font-black tracking-tight">Winner Audit</h1>
     {{ ui.statusBadge(character.status) }}

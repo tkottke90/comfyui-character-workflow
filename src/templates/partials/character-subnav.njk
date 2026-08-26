@@ -1,0 +1,19 @@
+<div class="flex flex-wrap gap-1 mb-5 border-b border-steel-200 dark:border-steel-800">
+  {% set tabs = [
+    {key: 'spec', label: 'Spec', href: '/characters/' + character.slug + '/spec'},
+    {key: 'casting', label: 'Casting', href: '/characters/' + character.slug + '/casting/preflight'},
+    {key: 'refinement', label: 'Refinement', href: '/characters/' + character.slug + '/refinement'},
+    {key: 'targetedFix', label: 'Targeted Fix', href: '/characters/' + character.slug + '/targeted-fix'},
+    {key: 'images', label: 'Images', href: '/characters/' + character.slug + '/images'},
+    {key: 'kit', label: 'Anchor kit', href: '/characters/' + character.slug + '/kit'},
+    {key: 'validation', label: 'Validation', href: '/characters/' + character.slug + '/validation'},
+    {key: 'dataset', label: 'Dataset', href: '/characters/' + character.slug + '/dataset'}
+  ] %}
+  {% for tab in tabs %}
+    <a href="{{ tab.href }}"
+       class="px-3.5 py-2 text-[13px] font-bold -mb-px border-b-2 transition-colors
+              {{ 'text-apple-800 dark:text-apple-200 border-apple-600' if subsection == tab.key else 'text-steel-500 border-transparent hover:text-steel-700 dark:hover:text-steel-300' }}">
+      {{ tab.label }}
+    </a>
+  {% endfor %}
+</div>
