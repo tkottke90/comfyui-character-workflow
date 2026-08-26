@@ -1,5 +1,6 @@
 {% extends "layout.njk" %}
 {% set section = "characters" %}
+{% set subsection = "validation" %}
 {% import "macros.njk" as ui %}
 {% set tests = [
   ['newPose', 'New Pose Test', 'Likeness holds with FaceID at weight 0.7–0.8'],
@@ -8,6 +9,7 @@
 ] %}
 {% block content %}
   {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Downstream Validation'}]) }}
+  {% include "partials/character-subnav.njk" %}
   <div class="flex items-center gap-3 mb-6">
     <h1 class="text-xl font-black tracking-tight">Downstream Validation</h1>
     {{ ui.statusBadge(character.status) }}

@@ -1,8 +1,10 @@
 {% extends "layout.njk" %}
 {% set section = "characters" %}
+{% set subsection = "spec" %}
 {% import "macros.njk" as ui %}
 {% block content %}
   {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Spec Builder'}]) }}
+  {% include "partials/character-subnav.njk" %}
   <h1 class="text-xl font-black tracking-tight mb-5">Specification</h1>
 
   <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
