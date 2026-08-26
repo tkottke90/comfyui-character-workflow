@@ -262,6 +262,35 @@ describe('character-images.service', () => {
     });
   });
 
+  describe('deleteCastingCandidate', () => {
+    it('deletes an existing completed candidate and removes the file from disk', () => {
+      const service = createCharacterImagesService(dir);
+      const relativePath = service.storeCastingCandidate('rin-takahashi', 7, ONE_PIXEL_PNG_DATA_URL);
+
+      const result = service.deleteCastingCandidate('rin-takahashi', 7);
+
+      expect(result).to.deep.equal({ deleted: true });
+      expect(fs.existsSync(path.join(dir, 'rin-takahashi', relativePath))).to.equal(false);
+    });
+
+    it('is idempotent — deleting a missing or never-existing seed reports deleted: false', () => {
+      const service = createCharacterImagesService(dir);
+      const result = service.deleteCastingCandidate('rin-takahashi', 999);
+      expect(result).to.deep.equal({ deleted: false });
+    });
+
+    it('leaves unrelated seeds in the same casting_batch dir untouched', () => {
+      const service = createCharacterImagesService(dir);
+      service.storeCastingCandidate('rin-takahashi', 1, ONE_PIXEL_PNG_DATA_URL);
+      const otherRelativePath = service.storeCastingCandidate('rin-takahashi', 10, ONE_PIXEL_PNG_DATA_URL);
+
+      const result = service.deleteCastingCandidate('rin-takahashi', 1);
+
+      expect(result).to.deep.equal({ deleted: true });
+      expect(fs.existsSync(path.join(dir, 'rin-takahashi', otherRelativePath))).to.equal(true);
+    });
+  });
+
   describe('listGalleryTiles', () => {
     it('tags images from all three sources and keeps the flat list sorted newest first', () => {
       const service = createCharacterImagesService(dir);

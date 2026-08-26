@@ -79,6 +79,13 @@ export interface CharacterImagesService {
     filename: string,
   ): { deleted: boolean; wasCurrent: boolean };
   /**
+   * Deletes a single casting candidate's image file by seed. Idempotent, matching
+   * deleteWorkingFile — a seed with no file on disk (never generated, or already
+   * deleted) is not an error. There is no "current" concept for casting candidates,
+   * so the return shape is simpler than deleteWorkingFile's.
+   */
+  deleteCastingCandidate(slug: string, seed: number): { deleted: boolean };
+  /**
    * Every image belonging to a character — working files (image kind only; masks stay
    * inline in the mask editor, not standalone gallery tiles), finalized picks, and casting
    * candidates — as one flat, newest-first list for the Images gallery and the
@@ -291,6 +298,20 @@ export function createCharacterImagesService(dir: string): CharacterImagesServic
 
       fs.unlinkSync(targetPath);
       return { deleted: true, wasCurrent };
+    },
+
+    deleteCastingCandidate(slug, seed) {
+      const prefix = `seed-${sanitizeSegment(String(seed))}.`;
+      const match = computeCastingCandidates(slug).find((candidate) =>
+        candidate.filename.startsWith(prefix),
+      );
+      if (!match) return { deleted: false };
+
+      const targetPath = resolveWithinCharacterDir(slug, match.relativePath);
+      if (!fs.existsSync(targetPath)) return { deleted: false };
+
+      fs.unlinkSync(targetPath);
+      return { deleted: true };
     },
 
     listGalleryTiles(slug) {
