@@ -1,6 +1,6 @@
 {% extends "layout.njk" %}
 {% set section = "characters" %}
-{% set subsection = "casting" %}
+{% set subsection = "casting-preflight" %}
 {% import "macros.njk" as ui %}
 {% block content %}
   {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Casting'}]) }}
@@ -73,9 +73,5 @@
         {{ ui.button('Save Pre-flight') }}
       {% endcall %}
     </form>
-  </div>
-
-  <div class="mt-5">
-    <a href="/characters/{{ character.slug }}/casting/batch" class="text-[14px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Continue to Casting Batch →</a>
   </div>
 {% endblock %}
