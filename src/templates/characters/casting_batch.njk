@@ -1,6 +1,6 @@
 {% extends "layout.njk" %}
 {% set section = "characters" %}
-{% set subsection = "casting" %}
+{% set subsection = "casting-batch" %}
 {% import "macros.njk" as ui %}
 {% block content %}
   {{ ui.crumbs([{label: 'Characters', href: '/characters'}, {label: character.name, href: '/characters/' + character.slug}, {label: 'Casting Batch'}]) }}
