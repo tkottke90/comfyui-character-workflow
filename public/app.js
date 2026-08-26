@@ -327,4 +327,25 @@
         });
     });
   });
+
+  // ---- Character subnav dropdown (below md): trigger opens the phase menu,
+  // outside click / Escape / picking a link closes it ----
+  var subnavTrigger = document.getElementById('character-subnav-trigger');
+  var subnavMenu = document.getElementById('character-subnav-menu');
+  if (subnavTrigger && subnavMenu) {
+    var setSubnavOpen = function (open) {
+      subnavMenu.classList.toggle('hidden', !open);
+      subnavTrigger.setAttribute('aria-expanded', String(open));
+    };
+    subnavTrigger.addEventListener('click', function (event) {
+      event.stopPropagation();
+      setSubnavOpen(subnavMenu.classList.contains('hidden'));
+    });
+    document.addEventListener('click', function (event) {
+      if (!subnavMenu.contains(event.target)) setSubnavOpen(false);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') setSubnavOpen(false);
+    });
+  }
 })();
