@@ -15,8 +15,10 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
     {% if winner and winner.imagePath %}
-      <img src="/characters/{{ character.slug }}/images/file/{{ winner.imagePath }}"
-        class="aspect-[3/4] max-h-[440px] w-full object-cover rounded-lg" alt="" />
+      <div class="flex items-center justify-center max-h-[520px] h-full bg-steel-50 dark:bg-steel-900 rounded-lg p-2">
+        <img src="/characters/{{ character.slug }}/images/file/{{ winner.imagePath }}"
+          class="max-h-full max-w-full object-contain rounded-md" alt="" />
+      </div>
     {% else %}
       <div class="aspect-[3/4] max-h-[440px] placeholder-photo rounded-lg"></div>
     {% endif %}
