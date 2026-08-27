@@ -21,6 +21,17 @@ const AUDIT_ATTRIBUTE_LABELS: Array<[keyof Attributes, string]> = [
   ['base_clothing', 'Base clothing'],
 ];
 
+/**
+ * Resolves an audit row's display label (e.g. "Skin tone") back to the
+ * Attributes key it was derived from (e.g. "skin_tone"), so the amend
+ * route can write through to the canonical spec attribute as well as the
+ * row. Returns undefined for an unrecognized label — callers no-op rather
+ * than throw.
+ */
+export function resolveAttributeKeyByLabel(label: string): keyof Attributes | undefined {
+  return AUDIT_ATTRIBUTE_LABELS.find(([, l]) => l === label)?.[0];
+}
+
 export const DEFAULT_NEGATIVE_PROMPT =
   'cartoon, illustration, 3d render, cgi, painting, anime, deformed, extra limbs, extra fingers, ' +
   'bad hands, fused fingers, blurry, watermark, text, logo, cropped, out of frame, dramatic lighting, harsh shadows';

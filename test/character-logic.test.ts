@@ -18,6 +18,7 @@ import {
   mergeAttributeSuggestions,
   overviewChecklistRows,
   parsePhaseChecklist,
+  resolveAttributeKeyByLabel,
   slugify,
   DEFAULT_NEGATIVE_PROMPT,
 } from '../src/lib/character-logic';
@@ -337,6 +338,17 @@ describe('defaultAuditRows', () => {
     expect(skinRow?.specValue).to.equal('Fair');
     expect(skinRow?.ok).to.equal(true);
     expect(skinRow?.imageValue).to.equal('');
+  });
+});
+
+describe('resolveAttributeKeyByLabel', () => {
+  it('resolves a known label back to its Attributes key', () => {
+    expect(resolveAttributeKeyByLabel('Skin tone')).to.equal('skin_tone');
+    expect(resolveAttributeKeyByLabel('Height')).to.equal('height_impression');
+  });
+
+  it('returns undefined for an unrecognized label', () => {
+    expect(resolveAttributeKeyByLabel('Not a real attribute')).to.equal(undefined);
   });
 });
 
