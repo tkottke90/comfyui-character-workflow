@@ -41,6 +41,14 @@ export const CastingCandidateSchema = z.object({
 });
 export type CastingCandidate = z.infer<typeof CastingCandidateSchema>;
 
+export const PhaseImageSchema = z.object({
+  phase: z.enum(['preflight', 'casting']),
+  path: z.string(),
+  display_image: z.boolean().default(false),
+  selectedAt: z.string(),
+});
+export type PhaseImage = z.infer<typeof PhaseImageSchema>;
+
 export const AuditRowSchema = z.object({
   attribute: z.string(),
   specValue: z.string(),
@@ -175,6 +183,7 @@ export const CharacterSchema = z.object({
   views: z.array(ViewSchema).default(() => []),
   polish: z.array(PolishSchema).default(() => []),
   images: z.array(ImageAssetSchema).default(() => []),
+  phaseImages: z.array(PhaseImageSchema).default(() => []),
 
   downstreamValidation: DownstreamValidationSchema.default(() =>
     DownstreamValidationSchema.parse({}),

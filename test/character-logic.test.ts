@@ -20,6 +20,7 @@ import {
   parsePhaseChecklist,
   resolveAttributeKeyByLabel,
   slugify,
+  upsertPhaseImage,
   DEFAULT_NEGATIVE_PROMPT,
 } from '../src/lib/character-logic';
 import { StyleSchema } from '../src/schemas/style.schema';
@@ -360,6 +361,44 @@ describe('findImagePath', () => {
 
   it('returns an empty string when no image has that label', () => {
     expect(findImagePath([], 'Hero full-body')).to.equal('');
+  });
+});
+
+describe('upsertPhaseImage', () => {
+  it('inserts into an empty array', () => {
+    const result = upsertPhaseImage([], 'preflight', 'casting_preflight/img.png', true);
+    expect(result).to.have.length(1);
+    expect(result[0]).to.include({
+      phase: 'preflight',
+      path: 'casting_preflight/img.png',
+      display_image: true,
+    });
+  });
+
+  it('replaces an existing same-phase entry rather than appending', () => {
+    const existing = upsertPhaseImage([], 'preflight', 'old.png', true);
+    const result = upsertPhaseImage(existing, 'preflight', 'new.png', true);
+    expect(result).to.have.length(1);
+    expect(result[0].path).to.equal('new.png');
+  });
+
+  it('setting displayImage true clears display_image on the other phase entry', () => {
+    const withPreflight = upsertPhaseImage([], 'preflight', 'preflight.png', true);
+    const result = upsertPhaseImage(withPreflight, 'casting', 'winner.png', true);
+    expect(result).to.have.length(2);
+    const preflight = result.find((p) => p.phase === 'preflight');
+    const casting = result.find((p) => p.phase === 'casting');
+    expect(preflight?.display_image).to.equal(false);
+    expect(casting?.display_image).to.equal(true);
+  });
+
+  it('setting displayImage false leaves the other phase entry untouched', () => {
+    const withCasting = upsertPhaseImage([], 'casting', 'winner.png', true);
+    const result = upsertPhaseImage(withCasting, 'preflight', 'preflight.png', false);
+    const preflight = result.find((p) => p.phase === 'preflight');
+    const casting = result.find((p) => p.phase === 'casting');
+    expect(preflight?.display_image).to.equal(false);
+    expect(casting?.display_image).to.equal(true);
   });
 });
 

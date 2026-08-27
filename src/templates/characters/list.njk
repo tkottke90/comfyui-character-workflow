@@ -17,8 +17,12 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
       {% for character in characters %}
         <a href="/characters/{{ character.slug }}" class="block rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden hover:shadow-md transition-shadow">
-          <div class="aspect-[3/4] placeholder-photo flex items-center justify-center text-steel-400 text-xs">
-            {% if character.status == 'draft' %}not generated yet{% endif %}
+          <div class="aspect-[3/4] {{ '' if character.displayImagePath else 'placeholder-photo' }} flex items-center justify-center text-steel-400 text-xs overflow-hidden">
+            {% if character.displayImagePath %}
+              <img src="/characters/{{ character.slug }}/images/file/{{ character.displayImagePath }}" class="w-full h-full object-cover" alt="" />
+            {% elif character.status == 'draft' %}
+              not generated yet
+            {% endif %}
           </div>
           <div class="p-3">
             <div class="font-bold text-[14.5px] mb-1">{{ character.name }}</div>
