@@ -1,4 +1,4 @@
-import type { AuditRow, Attributes, Character } from '../schemas/character.schema';
+import type { AuditRow, Attributes, Character, PhaseImage } from '../schemas/character.schema';
 import type { StyleRecord } from '../schemas/style.schema';
 import {
   CHECKLIST_DEFINITIONS,
@@ -232,6 +232,27 @@ export function defaultAuditRows(attributes: Attributes): AuditRow[] {
 
 export function findImagePath(images: Character['images'], label: string): string {
   return images.find((image) => image.label === label)?.path ?? '';
+}
+
+/**
+ * The only function that should write to `phaseImages` — clearing every other
+ * entry's `display_image` before setting a new one guarantees at most one
+ * `true` across the array, by construction rather than by validation.
+ */
+export function upsertPhaseImage(
+  phaseImages: Character['phaseImages'],
+  phase: PhaseImage['phase'],
+  path: string,
+  displayImage: boolean,
+): Character['phaseImages'] {
+  const withoutPhase = phaseImages.filter((p) => p.phase !== phase);
+  const cleared = displayImage
+    ? withoutPhase.map((p) => ({ ...p, display_image: false }))
+    : withoutPhase;
+  return [
+    ...cleared,
+    { phase, path, display_image: displayImage, selectedAt: new Date().toISOString() },
+  ];
 }
 
 /**

@@ -26,6 +26,7 @@ import {
   overviewChecklistRows,
   parsePhaseChecklist,
   resolveAttributeKeyByLabel,
+  upsertPhaseImage,
   DEFAULT_NEGATIVE_PROMPT,
 } from '../lib/character-logic';
 import { applyPromptAdapter } from '../lib/prompt-adapter';
@@ -164,7 +165,12 @@ export function createCharactersRouter(
   }
 
   router.get('/', (_req: Request, res: Response) => {
-    res.render('characters/list.njk', { characters: characters.list() });
+    res.render('characters/list.njk', {
+      characters: characters.list().map((character) => ({
+        ...character,
+        displayImagePath: character.phaseImages.find((p) => p.display_image)?.path ?? null,
+      })),
+    });
   });
 
   router.get('/new', (_req: Request, res: Response) => {
@@ -209,7 +215,13 @@ export function createCharactersRouter(
 
   router.get('/:slug/images', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
-    const tiles = characterImages.listGalleryTiles(character.slug);
+    const phaseImagePaths = new Set(character.phaseImages.map((p) => p.path));
+    const tiles = characterImages.listGalleryTiles(character.slug).map((tile) => {
+      const inScope =
+        (tile.source.kind === 'working' && tile.source.phaseBindingKey === 'casting_preflight') ||
+        tile.source.kind === 'casting';
+      return inScope ? { ...tile, isCurrent: phaseImagePaths.has(tile.relativePath) } : tile;
+    });
     const phaseBindingLabels = Object.fromEntries(allPhaseBindings().map((b) => [b.key, b.label]));
 
     const badgeFor = (tile: (typeof tiles)[number]): { value: string; label: string } =>
@@ -499,9 +511,24 @@ export function createCharactersRouter(
       ...character.checklist,
       ...parsePhaseChecklist('preflight', req.body.checklist),
     };
+    const currentPreflightFile = characterImages.getCurrentWorkingFile(
+      character.slug,
+      'casting_preflight',
+      'image',
+    );
+    const hasWinner = character.phaseImages.some((p) => p.phase === 'casting');
+    const phaseImages = currentPreflightFile
+      ? upsertPhaseImage(
+          character.phaseImages,
+          'preflight',
+          currentPreflightFile.relativePath,
+          !hasWinner,
+        )
+      : character.phaseImages;
     characters.update(character.slug, {
       checklist,
       images: upsertImage(character.images, 'Hero full-body', String(req.body.heroPath ?? '')),
+      phaseImages,
     });
     res.redirect(`/characters/${character.slug}/casting/preflight`);
   });
@@ -561,7 +588,12 @@ export function createCharactersRouter(
 
   router.post('/:slug/casting/candidates/:seed/select', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
-    characters.update(character.slug, { winnerCandidateSeed: Number(param(req, 'seed')) });
+    const seed = Number(param(req, 'seed'));
+    const candidate = character.castingCandidates.find((c) => c.seed === seed);
+    const phaseImages = candidate
+      ? upsertPhaseImage(character.phaseImages, 'casting', candidate.imagePath, true)
+      : character.phaseImages;
+    characters.update(character.slug, { winnerCandidateSeed: seed, phaseImages });
     res.redirect(`/characters/${character.slug}/casting/winner-audit`);
   });
 
