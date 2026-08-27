@@ -25,6 +25,7 @@ import {
   mergeAttributeSuggestions,
   overviewChecklistRows,
   parsePhaseChecklist,
+  resolveAttributeKeyByLabel,
   DEFAULT_NEGATIVE_PROMPT,
 } from '../lib/character-logic';
 import { applyPromptAdapter } from '../lib/prompt-adapter';
@@ -585,26 +586,61 @@ export function createCharactersRouter(
     const character = getCharacterOr404(characters, param(req, 'slug'));
     const rows =
       character.auditRows.length > 0 ? character.auditRows : defaultAuditRows(character.attributes);
-    res.render('characters/winner_audit.njk', { ...baseContext(character), rows });
+    const winner = character.castingCandidates.find(
+      (c) => c.seed === character.winnerCandidateSeed,
+    );
+    res.render('characters/winner_audit.njk', { ...baseContext(character), rows, winner });
   });
 
-  router.post('/:slug/casting/winner-audit', (req: Request, res: Response) => {
+  router.post('/:slug/casting/audit-rows/:index/toggle', (req: Request, res: Response) => {
     const character = getCharacterOr404(characters, param(req, 'slug'));
-    const posted = Array.isArray(req.body.rows)
-      ? req.body.rows
-      : Object.values(req.body.rows ?? {});
-    const auditRows = posted.map((row: Record<string, unknown>) => ({
-      attribute: String(row.attribute ?? ''),
-      specValue: String(row.specValue ?? ''),
-      imageValue: String(row.imageValue ?? ''),
-      ok: Boolean(row.ok),
-    }));
+    const index = Number(param(req, 'index'));
+    const rows =
+      character.auditRows.length > 0 ? character.auditRows : defaultAuditRows(character.attributes);
 
-    characters.update(character.slug, {
-      auditRows,
-      checklist: { ...character.checklist, 'casting.candidates_scored': true },
-    });
+    if (Number.isInteger(index) && index >= 0 && index < rows.length) {
+      characters.update(character.slug, {
+        auditRows: rows.map((row, i) => (i === index ? { ...row, ok: !row.ok } : row)),
+        checklist: { ...character.checklist, 'casting.candidates_scored': true },
+      });
+    }
     res.redirect(`/characters/${character.slug}/casting/winner-audit`);
+  });
+
+  router.post('/:slug/casting/audit-rows/:index/amend', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const index = Number(param(req, 'index'));
+    const rows =
+      character.auditRows.length > 0 ? character.auditRows : defaultAuditRows(character.attributes);
+    const row = rows[index];
+
+    if (Number.isInteger(index) && index >= 0 && row) {
+      const value = String(req.body.specValue ?? '');
+      const attributeKey = resolveAttributeKeyByLabel(row.attribute);
+      characters.update(character.slug, {
+        auditRows: rows.map((r, i) => (i === index ? { ...r, specValue: value, ok: true } : r)),
+        attributes: attributeKey
+          ? { ...character.attributes, [attributeKey]: value }
+          : character.attributes,
+        checklist: { ...character.checklist, 'casting.candidates_scored': true },
+      });
+    }
+    res.redirect(`/characters/${character.slug}/casting/winner-audit`);
+  });
+
+  router.post('/:slug/casting/candidates/:seed/reject', (req: Request, res: Response) => {
+    const character = getCharacterOr404(characters, param(req, 'slug'));
+    const seed = Number(param(req, 'seed'));
+
+    if (seed === character.winnerCandidateSeed) {
+      characterImages.deleteCastingCandidate(character.slug, seed);
+      characters.update(character.slug, {
+        castingCandidates: character.castingCandidates.filter((c) => c.seed !== seed),
+        winnerCandidateSeed: null,
+        auditRows: [],
+      });
+    }
+    res.redirect(`/characters/${character.slug}/casting/batch`);
   });
 
   router.post('/:slug/casting/lock', (req: Request, res: Response) => {
