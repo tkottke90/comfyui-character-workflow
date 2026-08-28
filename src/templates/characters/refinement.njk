@@ -36,13 +36,19 @@
         <form method="post" action="/characters/{{ character.slug }}/images/{{ phaseBindingKey }}">
           <input type="hidden" name="dataUrl" value="" />
           <input type="hidden" name="kind" value="image" />
-          <div class="relative aspect-[3/4] rounded-lg border-2 border-dashed border-steel-300 dark:border-steel-700 overflow-hidden cursor-pointer mb-2"
+          <div data-viewer-tile class="relative aspect-[3/4] rounded-lg border-2 border-dashed border-steel-300 dark:border-steel-700 overflow-hidden cursor-pointer mb-2"
             onclick="this.parentElement.querySelector('input[type=file]').click()">
             <img {% if currentImage %}src="/characters/{{ character.slug }}/images/file/{{ currentImage.relativePath }}"{% endif %}
               data-file-preview class="{{ '' if currentImage else 'hidden' }} absolute inset-0 w-full h-full object-cover" alt="" />
             <div class="absolute inset-0 flex items-center justify-center text-center p-3 text-[13px] font-semibold text-steel-500" data-file-label>
               {{ '' if currentImage else 'Drag an image here, or click to browse' }}
             </div>
+            {% if currentImage %}
+              <button type="button" data-viewer-trigger data-viewer-checklist="refinement-checklist-panel" aria-label="Enlarge image"
+                class="absolute top-1 right-1 z-10 inline-flex items-center justify-center w-7 h-7 rounded bg-black/50 text-white hover:bg-black/70">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+              </button>
+            {% endif %}
           </div>
           <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" />
           {{ ui.button('Save as current image', 'secondary') }}
@@ -54,7 +60,7 @@
           <button type="button" data-picker-toggle class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Choose from library</button>
           <div data-picker-panel data-highlight="{{ highlightRelativePath or '' }}" class="hidden mt-2 grid grid-cols-3 gap-2">
             {% for candidate in libraryCandidates %}
-              <form method="post" action="/characters/{{ character.slug }}/images/{{ phaseBindingKey }}/promote" data-picker-tile data-relative-path="{{ candidate.relativePath }}">
+              <form method="post" action="/characters/{{ character.slug }}/images/{{ phaseBindingKey }}/promote" data-picker-tile data-relative-path="{{ candidate.relativePath }}" class="relative">
                 <input type="hidden" name="sourceRelativePath" value="{{ candidate.relativePath }}" />
                 <button type="submit" class="block w-full aspect-square rounded-md overflow-hidden border border-steel-300 dark:border-steel-700">
                   {% if candidate.source.kind == 'finalized' %}
@@ -62,6 +68,10 @@
                   {% else %}
                     <img src="/characters/{{ character.slug }}/images/file/{{ candidate.relativePath }}" class="w-full h-full object-cover" alt="" />
                   {% endif %}
+                </button>
+                <button type="button" data-viewer-trigger data-viewer-group="refinement-picker" aria-label="Enlarge image"
+                  class="absolute top-1 left-1 z-10 inline-flex items-center justify-center w-6 h-6 rounded bg-black/50 text-white hover:bg-black/70">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
                 </button>
               </form>
             {% endfor %}
@@ -74,7 +84,8 @@
       <div class="text-[11.5px] font-bold uppercase tracking-wider text-apple-700 dark:text-apple-300 mb-2">Output preview</div>
       <div data-sse-events="/characters/{{ character.slug }}/events/{{ phaseBindingKey }}" data-initial-status="{{ job.status if job else '' }}" class="aspect-[3/4] rounded-lg border border-apple-300 relative overflow-hidden">
         {% if job and job.kind == 'single' and job.status == 'done' and job.resultPath %}
-          <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
+          <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}"
+            data-viewer-trigger data-viewer-checklist="refinement-checklist-panel" class="absolute inset-0 w-full h-full object-cover" alt="" />
         {% else %}
           <div class="placeholder-photo absolute inset-0"></div>
         {% endif %}
@@ -177,7 +188,8 @@
     {% endcall %}
   {% endif %}
 
-  <form method="post" action="/characters/{{ character.slug }}/refinement" class="mt-6">
+  <form method="post" action="/characters/{{ character.slug }}/refinement" class="mt-6"
+    id="refinement-checklist-panel" data-checklist-phase="refinement" data-viewer-ajax-form>
     {% call ui.card('Checklist') %}
       {% for item in items %}
         {{ ui.checkrow('checklist[' + item.id + ']', checklist['refinement.' + item.id], item.label) }}

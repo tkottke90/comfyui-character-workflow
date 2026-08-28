@@ -16,7 +16,7 @@
         data-initial-status="{{ job.status if job else '' }}"
         class="aspect-[2/3] max-h-[520px] rounded-lg border border-apple-300 relative overflow-hidden">
         {% if job and job.kind == 'single' and job.status == 'done' and job.resultPath %}
-          <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" class="absolute inset-0 w-full h-full object-cover" alt="" />
+          <img src="/characters/{{ character.slug }}/images/file/{{ job.resultPath }}" data-viewer-trigger data-viewer-checklist="preflight-checklist-panel" class="absolute inset-0 w-full h-full object-cover" alt="" />
         {% else %}
           <div class="placeholder-photo absolute inset-0 flex items-end justify-center p-3">
             {% if character.locked_seed %}{{ ui.mono('seed ' + character.locked_seed + ' · locked') }}{% endif %}
@@ -53,7 +53,8 @@
       <p class="text-[12px] text-steel-500 mt-1">Re-run on the same seed after each fix — only noise (the seed) should vary once you move to the batch.</p>
     </div>
 
-    <form method="post" action="/characters/{{ character.slug }}/casting/preflight">
+    <form method="post" action="/characters/{{ character.slug }}/casting/preflight"
+      id="preflight-checklist-panel" data-checklist-phase="preflight" data-viewer-ajax-form>
       {% call ui.card() %}
         <div class="mb-4">
           {% for item in items %}

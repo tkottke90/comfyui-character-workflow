@@ -43,8 +43,12 @@
       var statusEl = tile.querySelector('[data-tile-status]');
       if (statusEl) {
         if (sub.status === 'done') statusEl.textContent = '';
-        else if (sub.status === 'error') statusEl.textContent = 'Failed' + (sub.error && sub.error.message ? ': ' + sub.error.message : '');
-        else if (sub.status === 'running') statusEl.textContent = 'Running' + (sub.progress ? ' ' + sub.progress.value + '/' + sub.progress.max : '…');
+        else if (sub.status === 'error')
+          statusEl.textContent =
+            'Failed' + (sub.error && sub.error.message ? ': ' + sub.error.message : '');
+        else if (sub.status === 'running')
+          statusEl.textContent =
+            'Running' + (sub.progress ? ' ' + sub.progress.value + '/' + sub.progress.max : '…');
         else statusEl.textContent = 'Queued…';
       }
 
@@ -57,6 +61,8 @@
         } else if (placeholder) {
           var newImg = document.createElement('img');
           newImg.setAttribute('data-tile-image', '');
+          newImg.setAttribute('data-viewer-trigger', '');
+          newImg.setAttribute('data-viewer-group', 'casting-batch');
           newImg.setAttribute('src', src);
           newImg.setAttribute('alt', '');
           newImg.className = placeholder.className;
@@ -120,9 +126,13 @@
         if (summary.total === 0) setStatus('');
         else if (summary.done + summary.failed >= summary.total) {
           source.close();
-          setStatus(summary.failed > 0 ? summary.done + '/' + summary.total + ' done, ' + summary.failed + ' failed' : 'All ' + summary.total + ' candidates done');
+          setStatus(
+            summary.failed > 0
+              ? summary.done + '/' + summary.total + ' done, ' + summary.failed + ' failed'
+              : 'All ' + summary.total + ' candidates done',
+          );
         } else {
-          setStatus((summary.done + summary.failed) + ' of ' + summary.total + ' finished…');
+          setStatus(summary.done + summary.failed + ' of ' + summary.total + ' finished…');
         }
         return;
       }
@@ -138,7 +148,10 @@
           progressEl.value = job.progress.value;
           progressEl.classList.remove('hidden');
         }
-        setStatus('Running' + (job.progress ? ' — step ' + job.progress.value + ' of ' + job.progress.max : '…'));
+        setStatus(
+          'Running' +
+            (job.progress ? ' — step ' + job.progress.value + ' of ' + job.progress.max : '…'),
+        );
         return;
       }
 

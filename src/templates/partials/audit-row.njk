@@ -1,0 +1,44 @@
+{#
+  One Winner Audit attribute row. Rendered both by winner_audit.njk's normal
+  loop and standalone by the toggle/amend routes in characters.views.ts,
+  which return the resulting HTML as JSON so the image-viewer modal can swap
+  a single row's markup in place without a full page reload. Expects row,
+  index, and character (for character.slug / character.winnerCandidateSeed)
+  in scope. Uses a Nunjucks comment here deliberately, not an HTML one — an
+  HTML comment's contents still get parsed as template syntax, and this
+  file's own include/render call would otherwise recurse into itself.
+#}
+<div class="flex flex-col gap-2 pb-3 border-b border-steel-100 dark:border-steel-800 last:border-0" data-audit-row-index="{{ index }}">
+  <div class="flex items-start gap-3">
+    <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full mt-1 {{ 'bg-success-600' if row.ok else 'bg-rose-600' }}">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+        {% if row.ok %}<path d="M20 6 9 17l-5-5" />{% else %}<path d="M18 6 6 18M6 6l12 12" />{% endif %}
+      </svg>
+    </span>
+    <div class="flex-1">
+      <div class="text-[13.5px] font-semibold mb-0.5">{{ row.attribute }}</div>
+      <div class="text-[13px] text-steel-500">{{ row.specValue }}</div>
+    </div>
+    <form method="post" action="/characters/{{ character.slug }}/casting/audit-rows/{{ index }}/toggle" class="shrink-0" data-viewer-ajax-form>
+      <button type="submit" class="text-[12px] font-semibold {{ 'text-rose-700 dark:text-rose-300' if row.ok else 'text-apple-700 dark:text-apple-300' }} hover:underline">
+        {{ 'Flag mismatch' if row.ok else 'Mark as OK' }}
+      </button>
+    </form>
+  </div>
+
+  {% if not row.ok %}
+    <div class="ml-7 flex flex-wrap items-center gap-3">
+      <form method="post" action="/characters/{{ character.slug }}/casting/audit-rows/{{ index }}/amend" class="flex items-center gap-2" data-viewer-ajax-form>
+        <input name="specValue" value="{{ row.specValue }}"
+          class="rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" />
+        <button type="submit" class="text-[12px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">Amend spec to match image</button>
+      </form>
+      {% if character.winnerCandidateSeed %}
+        <form method="post" action="/characters/{{ character.slug }}/casting/candidates/{{ character.winnerCandidateSeed }}/reject"
+          onsubmit="return confirm('Reject this candidate? This deletes it and clears the winner audit. This cannot be undone.');">
+          <button type="submit" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Reject candidate</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

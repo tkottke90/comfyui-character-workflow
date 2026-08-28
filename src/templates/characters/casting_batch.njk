@@ -55,7 +55,8 @@
           <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-casting-tile data-seed="{{ candidate.seed }}">
             <div class="aspect-[3/4] relative overflow-hidden">
               {% if candidate.imagePath %}
-                <img src="/characters/{{ character.slug }}/images/file/{{ candidate.imagePath }}" data-tile-image class="absolute inset-0 w-full h-full object-cover" alt="" />
+                <img src="/characters/{{ character.slug }}/images/file/{{ candidate.imagePath }}" data-tile-image
+                  data-viewer-trigger data-viewer-group="casting-batch" class="absolute inset-0 w-full h-full object-cover" alt="" />
               {% else %}
                 <div class="placeholder-photo absolute inset-0" data-tile-placeholder></div>
               {% endif %}
