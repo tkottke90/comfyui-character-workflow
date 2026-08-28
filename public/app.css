@@ -9,3 +9,20 @@
     border-color: #2c3b4e;
   }
 }
+
+/* Tailwind's CDN build has no arbitrary-variant syntax that reaches ::backdrop,
+   so the image viewer dialog's backdrop is styled here instead. */
+dialog[data-image-viewer] {
+  border: none;
+  padding: 0;
+}
+
+dialog[data-image-viewer]::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  dialog[data-image-viewer]::backdrop {
+    background: rgba(0, 0, 0, 0.75);
+  }
+}

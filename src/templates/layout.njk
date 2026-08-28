@@ -61,8 +61,10 @@
       {% block content %}{% endblock %}
     </div>
   </main>
+  {% include "partials/image-viewer.njk" %}
   <script src="/app.js"></script>
   <script src="/mask-editor.js"></script>
   <script src="/sse-client.js"></script>
+  <script src="/image-viewer.js"></script>
 </body>
 </html>

@@ -416,8 +416,16 @@ export function createCharactersRouter(
       styles: styles.list(),
       checklistItems: CHECKLIST_DEFINITIONS.specification,
       previewIdentityBlock,
-      previewPositivePrompt: applyPromptAdapter(previewIdentityBlock, character.promptAdapter, 'positive'),
-      previewNegativePrompt: applyPromptAdapter(character.negativePrompt, character.promptAdapter, 'negative'),
+      previewPositivePrompt: applyPromptAdapter(
+        previewIdentityBlock,
+        character.promptAdapter,
+        'positive',
+      ),
+      previewNegativePrompt: applyPromptAdapter(
+        character.negativePrompt,
+        character.promptAdapter,
+        'negative',
+      ),
       attributeSuggestions: mergeAttributeSuggestions(
         DEFAULT_ATTRIBUTE_SUGGESTIONS,
         configuredSuggestions,
@@ -530,6 +538,10 @@ export function createCharactersRouter(
       images: upsertImage(character.images, 'Hero full-body', String(req.body.heroPath ?? '')),
       phaseImages,
     });
+    if (req.accepts(['html', 'json']) === 'json') {
+      res.json({ checklist });
+      return;
+    }
     res.redirect(`/characters/${character.slug}/casting/preflight`);
   });
 
@@ -629,12 +641,31 @@ export function createCharactersRouter(
     const index = Number(param(req, 'index'));
     const rows =
       character.auditRows.length > 0 ? character.auditRows : defaultAuditRows(character.attributes);
+    const valid = Number.isInteger(index) && index >= 0 && index < rows.length;
+    const updatedRows = valid
+      ? rows.map((row, i) => (i === index ? { ...row, ok: !row.ok } : row))
+      : rows;
 
-    if (Number.isInteger(index) && index >= 0 && index < rows.length) {
+    if (valid) {
       characters.update(character.slug, {
-        auditRows: rows.map((row, i) => (i === index ? { ...row, ok: !row.ok } : row)),
+        auditRows: updatedRows,
         checklist: { ...character.checklist, 'casting.candidates_scored': true },
       });
+    }
+    if (req.accepts(['html', 'json']) === 'json') {
+      if (!valid) {
+        res.json({});
+        return;
+      }
+      res.render(
+        'partials/audit-row.njk',
+        { row: updatedRows[index], index, character },
+        (err, rowHtml) => {
+          if (err) throw err;
+          res.json({ rowHtml });
+        },
+      );
+      return;
     }
     res.redirect(`/characters/${character.slug}/casting/winner-audit`);
   });
@@ -645,17 +676,36 @@ export function createCharactersRouter(
     const rows =
       character.auditRows.length > 0 ? character.auditRows : defaultAuditRows(character.attributes);
     const row = rows[index];
+    const valid = Number.isInteger(index) && index >= 0 && Boolean(row);
+    const value = String(req.body.specValue ?? '');
+    const updatedRows = valid
+      ? rows.map((r, i) => (i === index ? { ...r, specValue: value, ok: true } : r))
+      : rows;
 
-    if (Number.isInteger(index) && index >= 0 && row) {
-      const value = String(req.body.specValue ?? '');
+    if (valid) {
       const attributeKey = resolveAttributeKeyByLabel(row.attribute);
       characters.update(character.slug, {
-        auditRows: rows.map((r, i) => (i === index ? { ...r, specValue: value, ok: true } : r)),
+        auditRows: updatedRows,
         attributes: attributeKey
           ? { ...character.attributes, [attributeKey]: value }
           : character.attributes,
         checklist: { ...character.checklist, 'casting.candidates_scored': true },
       });
+    }
+    if (req.accepts(['html', 'json']) === 'json') {
+      if (!valid) {
+        res.json({});
+        return;
+      }
+      res.render(
+        'partials/audit-row.njk',
+        { row: updatedRows[index], index, character },
+        (err, rowHtml) => {
+          if (err) throw err;
+          res.json({ rowHtml });
+        },
+      );
+      return;
     }
     res.redirect(`/characters/${character.slug}/casting/winner-audit`);
   });
@@ -796,6 +846,10 @@ export function createCharactersRouter(
       3,
     );
 
+    const checklist = {
+      ...character.checklist,
+      ...parsePhaseChecklist('refinement', req.body.checklist),
+    };
     characters.update(character.slug, {
       refinement: {
         currentStep: step,
@@ -804,11 +858,12 @@ export function createCharactersRouter(
         cleanupDenoise: Number(req.body.cleanupDenoise) || character.refinement.cleanupDenoise,
         upscaleTarget: Number(req.body.upscaleTarget) || character.refinement.upscaleTarget,
       },
-      checklist: {
-        ...character.checklist,
-        ...parsePhaseChecklist('refinement', req.body.checklist),
-      },
+      checklist,
     });
+    if (req.accepts(['html', 'json']) === 'json') {
+      res.json({ checklist });
+      return;
+    }
     res.redirect(`/characters/${character.slug}/refinement`);
   });
 
