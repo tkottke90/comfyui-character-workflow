@@ -20,6 +20,18 @@ defined here are the "domain fields" a future Configuration-page mapping
 screen (out of scope for this spec, analogous to the character-integration
 workflow-mapping screen) will bind to actual workflow node inputs.
 
+Critically, defining a field here is **opt-in**: a raw ComfyUI workflow
+can easily have dozens of node inputs, and requiring the user to map every
+single one before they can generate anything would defeat the point of
+"run it as-is." The intended model — which this spec's data shapes are
+built to support, even though the mapping/execution step itself is a
+later spec — is that every node input the user does *not* create a field
+for stays a **static passthrough of whatever literal value is already in
+the attached `workflow.json`**. Only node inputs the user explicitly
+surfaces as a field become tweakable per-generation. This is the inverse
+of the character-integration pipeline, where every mapping starts
+`'unset'` and must be explicitly resolved before a workflow can run.
+
 ## Current implementation
 
 - `GET /:id/workspace/generation` (`src/views/manual.views.ts:61-67`)
@@ -61,6 +73,13 @@ workflow-mapping screen) will bind to actual workflow node inputs.
   upload-vs-select radio-panel pattern (client-side `FileReader` → hidden
   data-URL field for upload; `<select>` for pick-existing) that this spec
   reuses for image-type field values.
+- The `navTabs()` macro (`src/templates/macros.njk`) + its generic
+  `[data-subnav]` block in `public/app.js` is this codebase's existing
+  precedent for "a reusable macro paired with a generic, data-attribute-
+  driven JS module usable by more than one page" (it already backs three
+  independent subnavs: character, integration, and manual-workspace).
+  This spec follows the same convention for the field-form component
+  below, rather than writing manual-workspace-specific markup/JS.
 
 ## Design
 
@@ -237,6 +256,110 @@ Both are small, self-contained additions that the future
 only because an image-type field's "upload" mode has no other way to
 produce something selectable.
 
+### Reusable component: `ui.dynamicFieldForm()` macro
+
+Per the goal of making this add/edit/delete key-type-value form usable
+outside the manual workspace, it's built the same way `navTabs()` is: a
+parameterized macro in `macros.njk` that emits a self-contained widget,
+paired with a generic JS module that knows nothing about "manual
+sessions" or "workflows" — only about fields and an API endpoint.
+
+```njk
+{% macro dynamicFieldForm(fields, fieldsEndpoint, imageValuePartial=none) %}
+  <div data-dynamic-field-form data-fields-endpoint="{{ fieldsEndpoint }}"
+       {% if imageValuePartial %}data-image-value-partial="{{ imageValuePartial }}"{% endif %}>
+    <div data-fields-list>
+      {% for field in fields %}
+        {{ _dynamicFieldRow(field, imageValuePartial) }}
+      {% endfor %}
+    </div>
+    <button type="button" class="mt-3 text-[13px] font-semibold text-apple-700 dark:text-apple-300" data-add-field>+ Add Field</button>
+  </div>
+{% endmacro %}
+
+{% macro _dynamicFieldRow(field, imageValuePartial) %}
+  <div class="mb-3" data-field-row data-field-id="{{ field.id }}" data-field-key="{{ field.key }}" data-field-type="{{ field.type }}">
+    <div class="flex items-center justify-between mb-1">
+      <label class="text-[13px] font-semibold text-steel-600 dark:text-steel-300">{{ field.key }}</label>
+      <div class="relative" data-field-menu>
+        <button type="button" class="text-steel-400 hover:text-steel-600 text-[13px] px-1" data-field-menu-trigger>⋯</button>
+        <div class="hidden absolute right-0 mt-1 bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-md shadow-sm text-[12.5px] z-10" data-field-menu-panel>
+          <button type="button" class="block w-full text-left px-3 py-1.5 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-edit>Edit</button>
+          <button type="button" class="block w-full text-left px-3 py-1.5 text-rose-700 dark:text-rose-300 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-delete>Delete</button>
+        </div>
+      </div>
+    </div>
+    <div data-field-value-slot>
+      {% if field.type == 'text' %}
+        <input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
+      {% elif field.type == 'number' %}
+        <input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
+      {% elif field.type == 'boolean' %}
+        <input type="checkbox" {{ 'checked' if field.value }} data-field-value />
+      {% elif field.type == 'image' and imageValuePartial %}
+        {% include imageValuePartial %}
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+```
+
+`fieldsEndpoint` is the only thing that ties an instance to a domain — a
+base URL where the generic JS below does `POST {endpoint}`,
+`PATCH {endpoint}/:id`, `DELETE {endpoint}/:id`, each accepting/returning
+`{id, key, type, value}` JSON. Any future consumer of this macro just
+needs backend routes matching that same shape (this spec's field routes,
+defined above, are the first implementation of it). `imageValuePartial`
+is an optional include-path hook for domain-specific "how do I pick an
+image" UI (Nunjucks supports `{% include someVariable %}`); omit it and
+image-type fields simply render with no value editor, which is a
+reasonable default for a consumer that doesn't have an image concept.
+
+### Frontend: `public/dynamic-fields.js` (new, reusable)
+
+A new small module, matching the self-contained-feature convention of
+`mask-editor.js`/`image-viewer.js`, scoped by `[data-dynamic-field-form]`,
+generic across whatever `data-fields-endpoint` it's given:
+
+- **Add field**: `+ Add Field` → `POST {endpoint}` with a default key
+  (e.g. `field_1`, incrementing) and type `text` → append the new row,
+  already in Edit mode, built client-side from the JSON response using a
+  row-template function that mirrors `_dynamicFieldRow`'s markup (the
+  same "no build step, so client and server templates are kept in sync by
+  hand" tradeoff `sse-client.js` already has for casting-batch tiles — not
+  a new problem this design introduces).
+- **Edit mode toggle**: "⋯ → Edit" swaps a row's value-slot markup to the
+  dashed-border editable form (key/type/value inputs + trash + "Done"),
+  built from the row's `data-field-*` attributes already in the DOM;
+  "Done" or blur-outside-the-row calls `PATCH {endpoint}/:id` with
+  `{key, type, value}`, then re-renders the row in Interact mode from the
+  response. Duplicate-key errors (409/400) render an inline message under
+  the key input rather than collapsing the row.
+- **Value-only edit**: a value control's `blur` event (Interact mode)
+  calls `PATCH {endpoint}/:id` with just `{ value }`.
+- **Delete**: `DELETE {endpoint}/:id`, remove the row from the DOM on
+  success.
+- **Image field "Change"**: the generic module has no concept of image
+  storage, so on click it dispatches a `dynamic-field:image-edit` custom
+  event on the field row (`detail: { fieldId, currentValue, resolve(imageId) }`)
+  and does nothing else — see the manual-specific glue below for how this
+  page answers it. A consumer with no listener simply gets a no-op click.
+
+### Manual-specific glue: `public/manual-generation.js` (new file)
+
+The only piece of this page's JS that *is* manual-workflow-specific —
+everything generic lives in `dynamic-fields.js` above:
+
+- Listens for `dynamic-field:image-edit` (bubbled from the
+  `dynamicFieldForm` instance rendered by `generation.njk`) and opens the
+  same upload/select radio-panel pattern as `manual-workflow-form.njk`:
+  upload via `FileReader` → data URL → `POST /api/v1/manual/:id/images`;
+  select via a `<select>` of `session.images`. Either path ends by calling
+  the event's `resolve(imageId)`, which `dynamic-fields.js` uses to
+  `PATCH {endpoint}/:id` with `{ value: imageId }` and update the
+  thumbnail (`/manual/:id/assets/:filename`, resolved from
+  `session.images` client-side or echoed back in the PATCH response).
+
 ### Frontend: `generation.njk`
 
 Follows `configuration.njk`'s structure (crumbs, title, subnav include),
@@ -253,15 +376,10 @@ narrower (Inputs), right column wider (Actions above Outputs):
   <h1 class="text-xl font-black tracking-tight mb-1">{{ session.workflowName }}</h1>
   {% include "partials/manual-workspace-subnav.njk" %}
 
-  <div class="flex flex-col md:flex-row gap-4" data-manual-fields data-session-id="{{ session.id }}">
+  <div class="flex flex-col md:flex-row gap-4">
     <div class="md:basis-2/5">
       {% call ui.card('Inputs') %}
-        <div data-fields-list>
-          {% for field in session.fields %}
-            {% include "partials/manual-field-row.njk" %}
-          {% endfor %}
-        </div>
-        <button type="button" class="mt-3 text-[13px] font-semibold text-apple-700 dark:text-apple-300" data-add-field>+ Add Field</button>
+        {{ ui.dynamicFieldForm(session.fields, '/api/v1/manual/' + session.id + '/fields', 'partials/manual-field-image-value.njk') }}
       {% endcall %}
     </div>
 
@@ -286,77 +404,20 @@ narrower (Inputs), right column wider (Actions above Outputs):
 {% endblock %}
 ```
 
-`manual-generation-outputs.njk` (new partial) renders the latest `done`
-generation as a full-width hero, then the rest in the standard
+`manual-generation-outputs.njk` (new partial, manual-specific — the
+Outputs grid isn't part of the reusable component) renders the latest
+`done` generation as a full-width hero, then the rest in the standard
 `grid grid-cols-2 sm:grid-cols-4 gap-4` tile pattern — both tagged
 `data-viewer-trigger data-viewer-group="manual-generations"`. Each
 generation's `imageId` is looked up against `session.images` to get the
 `filename` used in the `<img src="/manual/{{ session.id }}/assets/{{ image.filename }}">`
 URL, so the shared modal's prev/next spans the whole set.
 
-`manual-field-row.njk` (new partial) renders one field in Interact mode
-by default:
-
-```njk
-<div class="mb-3" data-field-row data-field-id="{{ field.id }}" data-field-type="{{ field.type }}">
-  <div class="flex items-center justify-between mb-1">
-    <label class="text-[13px] font-semibold text-steel-600 dark:text-steel-300">{{ field.key }}</label>
-    <div class="relative" data-field-menu>
-      <button type="button" class="text-steel-400 hover:text-steel-600 text-[13px] px-1" data-field-menu-trigger>⋯</button>
-      <div class="hidden absolute right-0 mt-1 bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-md shadow-sm text-[12.5px] z-10" data-field-menu-panel>
-        <button type="button" class="block w-full text-left px-3 py-1.5 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-edit>Edit</button>
-        <button type="button" class="block w-full text-left px-3 py-1.5 text-rose-700 dark:text-rose-300 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-delete>Delete</button>
-      </div>
-    </div>
-  </div>
-  <div data-field-value-slot>
-    {% if field.type == 'text' %}
-      <input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
-    {% elif field.type == 'number' %}
-      <input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
-    {% elif field.type == 'boolean' %}
-      <input type="checkbox" {{ 'checked' if field.value }} data-field-value />
-    {% elif field.type == 'image' %}
-      {% include "partials/manual-field-image-value.njk" %}
-    {% endif %}
-  </div>
-</div>
-```
-
-Clicking "Edit" (or the just-added field's row rendering directly in this
-state) swaps `data-field-value-slot`'s content for a dashed-border block
-with `key`/`type`/`value` inputs plus a trash icon and a "Done" checkmark,
-per the approved Section 3 behavior. That swap is driven client-side from
-the same field data already in the DOM (`data-field-*` attributes) —  no
-extra server round-trip just to enter Edit mode.
-
-### Frontend: `public/manual-fields.js` (new file)
-
-A new small module, matching the self-contained-feature convention of
-`mask-editor.js`/`image-viewer.js`, scoped by `[data-manual-fields]`:
-
-- **Add field**: `+ Add Field` → `POST /api/v1/manual/:id/fields` with a
-  default key (e.g. `field_1`, incrementing) and type `text` → prepend/
-  append the new row already in Edit mode (rendered client-side from the
-  JSON response, no page reload).
-- **Edit mode toggle**: "⋯ → Edit" swaps a row's value-slot markup to the
-  dashed-border editable form (built client-side from the field's
-  `data-field-*` attributes); "Done" or blur-outside-the-row calls
-  `PATCH /api/v1/manual/:id/fields/:fieldId` with `{key, type, value}`,
-  then re-renders the row in Interact mode from the response.
-  Duplicate-key errors (409/400 from the API) render an inline message
-  under the key input rather than collapsing the row.
-- **Value-only edit**: a value control's `blur` event (Interact mode)
-  calls `PATCH .../fields/:fieldId` with just `{ value }`.
-- **Delete**: `DELETE /api/v1/manual/:id/fields/:fieldId`, remove the row
-  from the DOM on success.
-- **Image field "Change"**: reveals the same upload/select radio-panel
-  markup as `manual-workflow-form.njk` (upload via `FileReader` → data
-  URL → `POST /api/v1/manual/:id/images` → then
-  `PATCH .../fields/:fieldId` with `{ value: image.id }`; select via a
-  `<select>` of `session.images`), then updates the thumbnail shown in
-  Interact mode using the resolved image's `filename`
-  (`/manual/:id/assets/:filename`).
+`manual-field-image-value.njk` (new partial, the `imageValuePartial` hook
+above) renders the current image field's value as a thumbnail (or an
+empty placeholder if `field.value` is null) plus a "Change" trigger button
+— the button that `manual-generation.js` listens for clicks on to fire
+its upload/select flow.
 
 ### Explicitly out of scope
 
@@ -376,6 +437,14 @@ A new small module, matching the self-contained-feature convention of
 - Any validation of an uploaded image beyond decoding + dimension read
   (no NSFW check, no size/format limits beyond what `parseDataUrl`
   already enforces).
+- A second real consumer of `ui.dynamicFieldForm()` — this spec builds
+  and proves the reusable contract (macro + generic JS + `{id,key,type,value}`
+  route shape) against exactly one page. No other page is refactored to
+  use it as part of this work.
+- Any formal plugin/registry mechanism for per-type value editors beyond
+  the single `imageValuePartial` include-hook — if a future consumer needs
+  a different custom type editor, extending that hook is a small, later
+  change, not something this spec generalizes further today.
 
 ## Testing
 
@@ -389,6 +458,12 @@ A new small module, matching the self-contained-feature convention of
 - View test for `GET .../workspace/generation`: renders correctly with
   (a) no fields + no generations, (b) fields present + no generations —
   covers all four field types in Interact mode.
+- `ui.dynamicFieldForm()` is exercised indirectly through the above (no
+  second consumer exists yet to test it against, per "Explicitly out of
+  scope"), but the macro/JS/route contract itself should be reviewed for
+  "would this work with a different `fieldsEndpoint` and no
+  `imageValuePartial`" as part of code review, since that's the whole
+  point of building it this way.
 - Manual verification via the `run` skill:
   - Add one field of each type; confirm each renders in Edit mode first,
     collapses to Interact on Done/blur-away.
