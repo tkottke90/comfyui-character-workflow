@@ -106,13 +106,15 @@ export function createManualWorkflowAPI(app: Application) {
       throw new BadRequestError('A workflow file or selection is required');
     }
 
+    const workflowSource = mode === 'upload' ? 'upload' : 'select';
+
     await writeJsonFile(path.join(session.workflowDir, 'workflow.json'), rawGraphJson);
-    await app.manualWorkflows.updateSession(session.id, { workflowFile: 'workflow.json' });
+    await app.manualWorkflows.updateSession(session.id, { workflowFile: 'workflow.json', workflowSource });
 
     if (req.query.view) {
       res.redirect(`/manual/${session.id}/workspace/configuration`);
     } else {
-      res.status(200).json({ ...session.toJSON(), workflowFile: 'workflow.json' });
+      res.status(200).json({ ...session.toJSON(), workflowFile: 'workflow.json', workflowSource });
     }
   });
 

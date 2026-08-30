@@ -30,6 +30,7 @@ const ManualWorkflowSessionSchema = z.object({
   description: z.string().default(''),
   workflowDir: z.string(),
   workflowFile: z.string().optional(),
+  workflowSource: z.enum(['upload', 'select']).optional(),
 
   images: z.array(ImageSchema).default([]),
   sessionNotes: z.array(SessionNoteSchema).default([]),
@@ -42,6 +43,7 @@ export const UploadSessionSchema = ManualWorkflowSessionSchema.pick({
   workflowName: true,
   description: true,
   workflowFile: true,
+  workflowSource: true,
   images: true,
   sessionNotes: true
 })
@@ -194,6 +196,7 @@ class ManualSession extends JsonRegistry<ManualWorkflowSession> {
   description: string;
   workflowDir: string;
   workflowFile?: string;
+  workflowSource?: ManualWorkflowSession['workflowSource'];
 
   images: ManualWorkflowSession['images'];
   sessionNotes: ManualWorkflowSession['sessionNotes'];
@@ -210,6 +213,7 @@ class ManualSession extends JsonRegistry<ManualWorkflowSession> {
     this.description = schema.description;
     this.workflowDir = schema.workflowDir;
     this.workflowFile = schema.workflowFile
+    this.workflowSource = schema.workflowSource;
     this.images = schema.images;
     this.sessionNotes = schema.sessionNotes;
   }
