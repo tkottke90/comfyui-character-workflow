@@ -41,6 +41,7 @@ const ManualWorkflowSessionSchema = z.object({
 export const UploadSessionSchema = ManualWorkflowSessionSchema.pick({
   workflowName: true,
   description: true,
+  workflowFile: true,
   images: true,
   sessionNotes: true
 })

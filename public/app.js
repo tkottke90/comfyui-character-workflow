@@ -430,4 +430,24 @@
       if (presetIdField) presetIdField.value = select.value;
     });
   });
+
+  // ---- Workflow source form (manual workspace Configuration tab): radio choice
+  // toggles which panel (upload vs select) is visible ----
+  document.querySelectorAll('[data-workflow-source]').forEach(function (root) {
+    var radios = root.querySelectorAll('input[name="mode"]');
+    var panels = root.querySelectorAll('[data-workflow-panel]');
+
+    var sync = function () {
+      var checked = root.querySelector('input[name="mode"]:checked');
+      var mode = checked ? checked.value : 'upload';
+      panels.forEach(function (panel) {
+        panel.classList.toggle('hidden', panel.dataset.workflowPanel !== mode);
+      });
+    };
+
+    radios.forEach(function (radio) {
+      radio.addEventListener('change', sync);
+    });
+    sync();
+  });
 })();

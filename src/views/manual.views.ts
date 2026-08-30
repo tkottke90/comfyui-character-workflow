@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { createWorkflowMappingService } from '../services/workflow-mapping.service';
+import { getWorkflowSlot } from '../comfy/workflow-registry';
 
 export function createManualViewRouter(router: Router) {
 
@@ -22,10 +24,37 @@ export function createManualViewRouter(router: Router) {
   });
 
   router.get('/:id/workspace/configuration', async (req: Request, res: Response) => {
+    const workflowMapping = createWorkflowMappingService(req.app.config.getConfigDir('workflows'));
     const session = await req.app.manualWorkflows.getSession(req.params.id.toString());
 
+    const integrationOptions = workflowMapping
+      .list()
+      .filter((record) => record.versions.length > 0)
+      .map((record) => {
+        const version = record.versions.at(-1)!; // latest only, not full history
+        const slot = getWorkflowSlot(record.slotId);
+        return {
+          value: `integration|${record.slotId}|${version.version}`,
+          label: `${slot?.label ?? record.slotId} — v${version.version} (${version.filename})`,
+        };
+      });
+
+    const otherSessionIds = Array.from(req.app.manualWorkflows.sessions.keys())
+      .filter((id) => id !== session.id);
+    const otherSessions = await Promise.all(
+      otherSessionIds.map((id) => req.app.manualWorkflows.getSession(id))
+    );
+    const sessionOptions = otherSessions
+      .filter((other) => other.workflowFile)
+      .map((other) => ({
+        value: `session|${other.id}`,
+        label: `${other.workflowName} (${other.workflowFile})`,
+      }));
+
     res.render('manual/workspace/configuration.njk', {
-      session: session.toJSON()
+      session: session.toJSON(),
+      integrationOptions,
+      sessionOptions
     });
   });
 
