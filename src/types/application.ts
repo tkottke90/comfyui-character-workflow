@@ -1,6 +1,7 @@
 import express from 'express';
 import { Logger } from '@tkottke90/logger';
 import z from 'zod';
+import { ManualWorkflowRegistry } from '@/services/manual-workflow.service';
 
 // Augment the Express namespace
 declare global {
@@ -83,6 +84,8 @@ declare global {
         updateSection(key: string, value: unknown): void;
       };
       logger: Logger;
+
+      manualWorkflows: ManualWorkflowRegistry
     }
 
     interface Request {

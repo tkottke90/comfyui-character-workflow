@@ -16,6 +16,8 @@ import { createCharactersRouter } from './characters.views';
 import { createTemplatesRouter } from './templates.views';
 import { createStylesRouter } from './styles.views';
 import { createIntegrationRouter } from './integration.views';
+import { createViewRouter } from '../lib/view-router';
+import { createManualViewRouter } from './manual.views';
 
 export function createViews(app: Application) {
   const templatesDir = path.join(process.cwd(), 'src', 'templates');
@@ -93,4 +95,5 @@ export function createViews(app: Application) {
   app.use('/templates', createTemplatesRouter(templatesService, charactersService));
   app.use('/styles', createStylesRouter(app, stylesService));
   app.use('/integration', createIntegrationRouter(app, workflowMappingService, comfySocket));
+  createViewRouter('/manual', app, createManualViewRouter)
 }

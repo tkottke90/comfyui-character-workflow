@@ -289,7 +289,7 @@ export function createIntegrationRouter(
       phaseBindings: phaseBindingRows(allRecords),
       allRecords,
       progress: requiredSlotProgress(allRecords),
-      canActivate: version ? canActivateVersion(version, slot) : false,
+      canActivate: version ? canActivateVersion(version) : false,
     });
   }
 
@@ -457,10 +457,8 @@ export function createIntegrationRouter(
       const target = record?.versions.find((v) => v.version === version);
       if (!target) throw new NotFoundError('Version not found');
 
-      if (!canActivateVersion(target, slot)) {
-        throw new BadRequestError(
-          'Every input must be mapped, a phase bound, and a result output set before activating',
-        );
+      if (!canActivateVersion(target)) {
+        throw new BadRequestError('Every input must be mapped and a result output set before activating');
       }
 
       workflowMapping.activateVersion(slot.id, version);

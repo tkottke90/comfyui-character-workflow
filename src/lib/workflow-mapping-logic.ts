@@ -1,5 +1,5 @@
 import type { WorkflowMappingRecord, WorkflowVersion } from '../schemas/workflow-mapping.schema';
-import { requiredWorkflowSlots, WorkflowSlotDef, WORKFLOW_SLOTS } from '../comfy/workflow-registry';
+import { requiredWorkflowSlots, WORKFLOW_SLOTS } from '../comfy/workflow-registry';
 
 export function isVersionFullyMapped(version: WorkflowVersion): boolean {
   return version.nodes.every((node) => node.status === 'mapped' || node.status === 'verified');
@@ -7,16 +7,11 @@ export function isVersionFullyMapped(version: WorkflowVersion): boolean {
 
 /**
  * A version can be activated once every input is mapped and a result output is set.
- * Binding to a phase is only required for slots that actually have one to bind to —
- * utility slots like 999-DualFaceID have no phase bindings at all.
+ * Phase binding is an optional label the Character process can use for lookup —
+ * it's never required to activate a version.
  */
-export function canActivateVersion(version: WorkflowVersion, slot: WorkflowSlotDef): boolean {
-  const needsPhaseBinding = slot.phaseBindings.length > 0;
-  return (
-    isVersionFullyMapped(version) &&
-    (!needsPhaseBinding || Boolean(version.boundPhaseSlotId)) &&
-    Boolean(version.resultOutput)
-  );
+export function canActivateVersion(version: WorkflowVersion): boolean {
+  return isVersionFullyMapped(version) && Boolean(version.resultOutput);
 }
 
 export function activeVersion(record: WorkflowMappingRecord): WorkflowVersion | undefined {

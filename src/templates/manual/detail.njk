@@ -1,0 +1,99 @@
+{% extends "layout.njk" %}
+{% set section = "manual" %}
+{% import "macros.njk" as ui %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Manual', href: '/manual'}, {label: workflow.workflowName}]) }}
+
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-black tracking-tight">
+      <span>{{ workflow.workflowName }}</span>
+      &nbsp;&nbsp;-&nbsp;&nbsp;
+      <span>{% call ui.copyable(workflow.id, inline=true) %}{{ ui.mono(workflow.id) }}{% endcall %}</span>
+    </h1>
+    <div class="flex items-center gap-3">
+      
+      <span data-delete-url="/api/v1/manual/{{ workflow.id }}"
+            data-confirm="Delete the {{ workflow.workflowName }} workflow? This removes all its images and notes."
+            data-delete-redirect="/manual">
+        {{ ui.button('Delete', 'danger', 'button') }}
+      </span>
+      <a href="/manual/{{ workflow.id }}/workspace" class="inline-flex items-center rounded-md px-4 py-2 text-[14px] font-semibold bg-apple-600 hover:bg-apple-700 text-white">
+        Workspace
+      </a>
+    </div>
+  </div>
+
+  <div class="mb-5 flex gap-4">
+    <p>Created At:&nbsp;&nbsp;{{ ui.mono(workflow.createdAt.toISOString().slice(0, 16).replace('T', ' ')) }}</p>
+    <p>Updated At:&nbsp;&nbsp;{{ ui.mono(workflow.updatedAt.toISOString().slice(0, 16).replace('T', ' ')) }}</p>
+  </div>
+
+
+  {% call ui.card('Details') %}
+    <dl class="flex flex-col gap-3 text-[13px]">
+      {% if workflow.description %}
+        <div>
+          <dt class="text-steel-500 mb-0.5">Description</dt>
+          <dd class="break-all">{{ ui.mono(workflow.workflowDir) }}</dd>
+        </div>
+        <p class="text-[14px] text-steel-600 dark:text-steel-300 mb-5">{{ workflow.description }}</p>
+      {% endif %}
+      <div>
+        <dt class="text-steel-500 mb-0.5">Workflow Directory</dt>
+        <dd class="break-all">{% call ui.copyable(workflow.id, inline=true) %}{{ ui.mono(workflow.workflowDir) }}{% endcall %}</dd>
+      </div>
+      {% if workflow.workflowFile %}
+        <div>
+          <dt class="text-steel-500 mb-0.5">Workflow File</dt>
+          <dd class="break-all">{{ ui.mono(workflow.workflowFile) }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  {% endcall %}
+
+  <br />
+
+  <div class="gap-5">
+    <div class="flex flex-col gap-5">
+      {% call ui.card('Images (' ~ workflow.images.length ~ ')') %}
+        {% if workflow.images.length == 0 %}
+          <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-6 text-center text-steel-500 text-[13px]">
+            No images yet.
+          </div>
+        {% else %}
+          <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            {% for image in workflow.images %}
+              <div class="aspect-square placeholder-photo rounded-md flex flex-col items-center justify-center gap-1 text-center p-2 relative">
+                {% if image.final %}
+                  <div class="absolute top-1 right-1">{{ ui.pill('final', 'green') }}</div>
+                {% endif %}
+                {% if image.nsfw %}
+                  <div class="absolute top-1 left-1">{{ ui.pill('nsfw', 'danger') }}</div>
+                {% endif %}
+                <span class="font-mono text-[11px] text-steel-500">{{ image.size.width }}&times;{{ image.size.height }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endcall %}
+
+      {% call ui.card('Session Notes (' ~ workflow.sessionNotes.length ~ ')') %}
+        {% if workflow.sessionNotes.length == 0 %}
+          <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-6 text-center text-steel-500 text-[13px]">
+            No notes yet.
+          </div>
+        {% else %}
+          <div class="flex flex-col gap-3">
+            {% for note in workflow.sessionNotes %}
+              <div class="border-b border-steel-100 dark:border-steel-800 last:border-0 pb-3 last:pb-0">
+                <p class="text-[14px] mb-1">{{ note.content }}</p>
+                {{ ui.mono(note.createdAt.toISOString().slice(0, 16).replace('T', ' ')) }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endcall %}
+    </div>
+  </div>
+ 
+{% endblock %}

@@ -97,7 +97,7 @@
 
         {% if slot.phaseBindings.length %}
           <div class="flex items-center gap-3 bg-white dark:bg-steel-900 border border-steel-300 dark:border-steel-700 rounded-lg px-3.5 py-3 mb-4">
-            <span class="text-[12.5px] font-bold whitespace-nowrap">Bind to phase<span class="text-rose-600 ml-0.5">*</span></span>
+            <span class="text-[12.5px] font-bold whitespace-nowrap">Bind to phase <span class="text-steel-400 font-normal">(optional)</span></span>
             {% if version.boundPhaseSlotId == slot.id %}
               <span class="text-[12.5px] text-apple-800 dark:text-apple-200 font-semibold">
                 ✓ Bound{% if slot.phaseBindings.length > 1 %} — fulfills {{ slot.phaseBindings | join(', ', 'label') }}{% else %} — fulfills {{ slot.phaseBindings[0].label }}{% endif %}
@@ -234,7 +234,7 @@
           <div class="flex items-center gap-3">
             <button type="button" disabled class="inline-flex items-center justify-center rounded-md px-4 py-2 text-[14px] font-semibold bg-steel-100 dark:bg-steel-800 text-steel-400 border border-steel-200 dark:border-steel-700 cursor-default">Activate this version</button>
             <span class="text-[11.5px] text-steel-400">
-              {% if slot.phaseBindings.length %}Bind this workflow to a phase, {% endif %}resolve any input flagged missing below, and set a result output before it can be activated.
+              Resolve any input flagged missing below and set a result output before it can be activated.
             </span>
           </div>
         {% endif %}

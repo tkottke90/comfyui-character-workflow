@@ -3,6 +3,7 @@ import { Application } from '../types/application';
 import { Router } from 'express';
 import { version } from '../../package.json';
 import { generateRandomSeed } from '../lib/random-seed';
+import { createManualWorkflowAPI } from './v1/manual';
 
 const v1 = Router();
 
@@ -24,6 +25,9 @@ v1.get('/', (_, res) => {
   });
 });
 
+
 export function createAPI(app: Application) {
+  v1.use('/manual', createManualWorkflowAPI(app))
+
   app.use('/api/v1', v1);
 }
