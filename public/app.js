@@ -359,6 +359,26 @@
     });
   });
 
+  // ---- Confirm-then-DELETE buttons: for actions whose REST endpoint only accepts DELETE
+  // (plain HTML forms can't send that verb), confirm, fire the request, then navigate to
+  // the redirect target on success. ----
+  document.querySelectorAll('[data-delete-url]').forEach(function (trigger) {
+    trigger.addEventListener('click', function () {
+      var message = trigger.getAttribute('data-confirm') || 'Are you sure?';
+      if (!window.confirm(message)) return;
+
+      fetch(trigger.getAttribute('data-delete-url'), { method: 'DELETE' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('delete request failed');
+          var redirect = trigger.getAttribute('data-delete-redirect');
+          if (redirect) window.location.href = redirect;
+        })
+        .catch(function () {
+          window.alert('Delete failed. Please try again.');
+        });
+    });
+  });
+
   // ---- Character subnav dropdown (below md): trigger opens the phase menu,
   // outside click / Escape / picking a link closes it ----
   var subnavTrigger = document.getElementById('character-subnav-trigger');
