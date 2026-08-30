@@ -1,0 +1,10 @@
+<div class="flex items-center gap-3" data-field-image-value data-field-image-id="{{ field.value or '' }}">
+  <div class="w-16 h-16 rounded-md overflow-hidden bg-steel-100 dark:bg-steel-800 flex-shrink-0" data-field-image-thumb-wrap>
+    {% if field.imageUrl %}
+      <img src="{{ field.imageUrl }}" class="w-full h-full object-cover" alt="" />
+    {% else %}
+      <div class="w-full h-full flex items-center justify-center text-steel-400 text-[11px]">No image</div>
+    {% endif %}
+  </div>
+  <button type="button" class="text-[13px] font-semibold text-apple-700 dark:text-apple-300" data-field-image-trigger>Change</button>
+</div>

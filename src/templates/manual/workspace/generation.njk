@@ -6,7 +6,30 @@
   {{ ui.crumbs([{label: 'Manual', href: '/manual'}, {label: session.workflowName, href: '/manual/' + session.id}, {label: 'Workspace'}]) }}
   <h1 class="text-xl font-black tracking-tight mb-1">{{ session.workflowName }}</h1>
   {% include "partials/manual-workspace-subnav.njk" %}
-  <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-6 text-center text-steel-500 text-[13px]">
-    Generation coming soon.
+
+  <div class="flex flex-col md:flex-row gap-4" data-session-id="{{ session.id }}" data-session-images="{{ session.images | dump }}">
+    <div class="md:basis-2/5">
+      {% call ui.card('Inputs') %}
+        {{ ui.dynamicFieldForm(fields, '/api/v1/manual/' + session.id + '/fields', 'partials/manual-field-image-value.njk') }}
+      {% endcall %}
+    </div>
+
+    <div class="md:basis-3/5 flex flex-col gap-4">
+      {% call ui.card('Actions') %}
+        <span title="Workflow field mapping isn't available yet — coming in a follow-up update.">
+          {{ ui.button('Generate', 'primary', 'button', true) }}
+        </span>
+      {% endcall %}
+
+      {% call ui.card('Outputs') %}
+        {% if doneGenerations.length == 0 %}
+          <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-8 text-center text-steel-500">
+            No generations yet.
+          </div>
+        {% else %}
+          {% include "partials/manual-generation-outputs.njk" %}
+        {% endif %}
+      {% endcall %}
+    </div>
   </div>
 {% endblock %}

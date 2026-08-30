@@ -1,0 +1,22 @@
+{% set latest = doneGenerations[doneGenerations.length - 1] %}
+{% set latestImage = imagesById[latest.imageId] %}
+<div class="mb-4">
+  <img src="/manual/{{ session.id }}/assets/{{ latestImage.filename }}" class="w-full rounded-lg object-cover aspect-video"
+    data-viewer-trigger data-viewer-group="manual-generations" alt="" />
+</div>
+
+{% if doneGenerations.length > 1 %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    {% for generation in doneGenerations %}
+      {% if not loop.last %}
+        {% set image = imagesById[generation.imageId] %}
+        <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden">
+          <div class="aspect-[3/4] relative overflow-hidden">
+            <img src="/manual/{{ session.id }}/assets/{{ image.filename }}"
+              data-viewer-trigger data-viewer-group="manual-generations" class="absolute inset-0 w-full h-full object-cover" alt="" />
+          </div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}

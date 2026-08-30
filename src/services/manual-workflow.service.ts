@@ -8,8 +8,9 @@ import { readFileWithSchema, writeJsonFile } from "@/lib/files";
 import { Logger } from "@tkottke90/logger";
 import { DefaultDateSchema } from "@/lib/validation";
 
-const ImageSchema = z.object({
+export const ImageSchema = z.object({
   id: z.string(),
+  filename: z.string(),
   size: z.object({ width: z.number(), height: z.number() }),
   parent: z.string().optional(),
   createdAt: z.coerce.date().default(() => new Date()),
@@ -24,6 +25,25 @@ const SessionNoteSchema = z.object({
   updatedAt: DefaultDateSchema
 })
 
+export const ManualFieldSchema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
+  key: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Key must be alphanumeric/underscore only'),
+  type: z.enum(['text', 'number', 'boolean', 'image']),
+  value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  createdAt: DefaultDateSchema,
+  updatedAt: DefaultDateSchema
+});
+
+export const ManualGenerationSchema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
+  status: z.enum(['queued', 'running', 'done', 'error']),
+  fieldValuesSnapshot: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  imageId: z.string().optional(),
+  error: z.string().optional(),
+  createdAt: DefaultDateSchema,
+  completedAt: z.coerce.date().optional()
+});
+
 const ManualWorkflowSessionSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   workflowName: z.string(),
@@ -34,6 +54,8 @@ const ManualWorkflowSessionSchema = z.object({
 
   images: z.array(ImageSchema).default([]),
   sessionNotes: z.array(SessionNoteSchema).default([]),
+  fields: z.array(ManualFieldSchema).default([]),
+  generations: z.array(ManualGenerationSchema).default([]),
 
   createdAt: DefaultDateSchema,
   updatedAt: DefaultDateSchema
@@ -45,7 +67,8 @@ export const UploadSessionSchema = ManualWorkflowSessionSchema.pick({
   workflowFile: true,
   workflowSource: true,
   images: true,
-  sessionNotes: true
+  sessionNotes: true,
+  fields: true
 })
 
 const ManualWorkflowSchema = RegistryBaseSchema.extend({
@@ -55,6 +78,8 @@ const ManualWorkflowSchema = RegistryBaseSchema.extend({
 export type ManualWorkflowSession = z.infer<typeof ManualWorkflowSessionSchema>;
 export type ManualWorkflowUpdateSession = z.infer<typeof UploadSessionSchema>;
 export type ManualWorkflowConfig = z.infer<typeof ManualWorkflowSchema>;
+export type ManualField = z.infer<typeof ManualFieldSchema>;
+export type ManualGeneration = z.infer<typeof ManualGenerationSchema>;
 
 export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWorkflowSchema>> {
   static readonly SCHEMA = ManualWorkflowSchema;
@@ -200,6 +225,8 @@ class ManualSession extends JsonRegistry<ManualWorkflowSession> {
 
   images: ManualWorkflowSession['images'];
   sessionNotes: ManualWorkflowSession['sessionNotes'];
+  fields: ManualWorkflowSession['fields'];
+  generations: ManualWorkflowSession['generations'];
 
   constructor(
       schema: ManualWorkflowSession,
@@ -216,6 +243,8 @@ class ManualSession extends JsonRegistry<ManualWorkflowSession> {
     this.workflowSource = schema.workflowSource;
     this.images = schema.images;
     this.sessionNotes = schema.sessionNotes;
+    this.fields = schema.fields;
+    this.generations = schema.generations;
   }
 
   generateLinks(baseRoute: string) {

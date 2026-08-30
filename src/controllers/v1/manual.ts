@@ -1,11 +1,23 @@
 import { Router, Request, Response } from 'express';
 import path from 'node:path';
-import { ManualWorkflowRegistry } from '@/services/manual-workflow.service';
+import crypto from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { imageSize } from 'image-size';
+import { ManualWorkflowRegistry, ManualFieldSchema, ImageSchema } from '@/services/manual-workflow.service';
 import { Application } from '@/types/application';
-import { BadRequestError } from '@/errors/http.errors';
+import { BadRequestError, NotFoundError } from '@/errors/http.errors';
 import { readJsonFile, writeJsonFile } from '@/lib/files';
-import { parseJsonDataUrl } from '@/lib/data-url';
+import { parseJsonDataUrl, parseDataUrl } from '@/lib/data-url';
 import { createWorkflowMappingService } from '@/services/workflow-mapping.service';
+
+function defaultValueForType(type: string) {
+  switch (type) {
+    case 'number': return 0;
+    case 'boolean': return false;
+    case 'image': return null;
+    default: return '';
+  }
+}
 
 
 export function createManualWorkflowAPI(app: Application) {
@@ -118,6 +130,102 @@ export function createManualWorkflowAPI(app: Application) {
     }
   });
 
+  /**
+   * Add a field to the session's Generation-page input form
+   */
+  manualRouter.post('/:id/fields', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    const key = String(req.body.key ?? '');
+    const type = String(req.body.type ?? 'text');
+
+    if (session.fields.some((f) => f.key === key)) {
+      throw new BadRequestError(`A field with key "${key}" already exists`);
+    }
+
+    let field;
+    try {
+      field = ManualFieldSchema.parse({ key, type, value: defaultValueForType(type) });
+    } catch (err) {
+      throw new BadRequestError(err instanceof Error ? err.message : 'Invalid field');
+    }
+
+    await app.manualWorkflows.updateSession(session.id, { fields: [...session.fields, field] });
+
+    res.status(201).json(field);
+  });
+
+  /**
+   * Update a field (rename key, change type/value)
+   */
+  manualRouter.patch('/:id/fields/:fieldId', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    const existing = session.fields.find((f) => f.id === req.params.fieldId);
+    if (!existing) throw new NotFoundError('Field not found');
+
+    const nextKey = req.body.key !== undefined ? String(req.body.key) : existing.key;
+    const nextType = req.body.type !== undefined ? String(req.body.type) : existing.type;
+
+    if (nextKey !== existing.key && session.fields.some((f) => f.id !== existing.id && f.key === nextKey)) {
+      throw new BadRequestError(`A field with key "${nextKey}" already exists`);
+    }
+
+    const value = nextType !== existing.type
+      ? defaultValueForType(nextType)
+      : (req.body.value !== undefined ? req.body.value : existing.value);
+
+    let updated;
+    try {
+      updated = ManualFieldSchema.parse({ ...existing, key: nextKey, type: nextType, value, updatedAt: new Date() });
+    } catch (err) {
+      throw new BadRequestError(err instanceof Error ? err.message : 'Invalid field');
+    }
+
+    const fields = session.fields.map((f) => (f.id === existing.id ? updated : f));
+    await app.manualWorkflows.updateSession(session.id, { fields });
+
+    res.status(200).json(updated);
+  });
+
+  /**
+   * Delete a field
+   */
+  manualRouter.delete('/:id/fields/:fieldId', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    const fields = session.fields.filter((f) => f.id !== req.params.fieldId);
+    if (fields.length === session.fields.length) throw new NotFoundError('Field not found');
+
+    await app.manualWorkflows.updateSession(session.id, { fields });
+    res.status(204).end();
+  });
+
+  /**
+   * Upload an image for use as an image-type field's value
+   */
+  manualRouter.post('/:id/images', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    const dataUrl = String(req.body.imageDataUrl ?? '');
+    if (!dataUrl) throw new BadRequestError('An image file is required');
+
+    let buffer: Buffer, extension: string, width: number, height: number;
+    try {
+      ({ buffer, extension } = parseDataUrl(dataUrl));
+      ({ width, height } = imageSize(buffer));
+    } catch (err) {
+      throw new BadRequestError(err instanceof Error ? err.message : 'Invalid image file');
+    }
+
+    const id = crypto.randomUUID();
+    const filename = `${id}.${extension}`;
+
+    const assetsDir = path.join(session.workflowDir, 'assets');
+    await mkdir(assetsDir, { recursive: true });
+    await writeFile(path.join(assetsDir, filename), buffer);
+
+    const image = ImageSchema.parse({ id, filename, size: { width, height } });
+    await app.manualWorkflows.updateSession(session.id, { images: [...session.images, image] });
+
+    res.status(201).json(image);
+  });
 
   return manualRouter;
 }

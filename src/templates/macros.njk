@@ -143,3 +143,41 @@
   } %}
   <button type="{{ type }}" {% if disabled %}disabled{% endif %} class="inline-flex items-center justify-center rounded-md px-4 py-2 text-[14px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed {{ classes[kind] }}">{{ text }}</button>
 {% endmacro %}
+
+{% macro dynamicFieldForm(fields, fieldsEndpoint, imageValuePartial=none) %}
+  <div data-dynamic-field-form data-fields-endpoint="{{ fieldsEndpoint }}"
+       {% if imageValuePartial %}data-image-value-partial="{{ imageValuePartial }}"{% endif %}>
+    <div data-fields-list>
+      {% for field in fields %}
+        {{ _dynamicFieldRow(field, imageValuePartial) }}
+      {% endfor %}
+    </div>
+    <button type="button" class="mt-3 text-[13px] font-semibold text-apple-700 dark:text-apple-300" data-add-field>+ Add Field</button>
+  </div>
+{% endmacro %}
+
+{% macro _dynamicFieldRow(field, imageValuePartial) %}
+  <div class="mb-3" data-field-row data-field-id="{{ field.id }}" data-field-key="{{ field.key }}" data-field-type="{{ field.type }}">
+    <div class="flex items-center justify-between mb-1">
+      <label class="text-[13px] font-semibold text-steel-600 dark:text-steel-300">{{ field.key }}</label>
+      <div class="relative" data-field-menu>
+        <button type="button" class="text-steel-400 hover:text-steel-600 text-[13px] px-1" data-field-menu-trigger>⋯</button>
+        <div class="hidden absolute right-0 mt-1 bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-md shadow-sm text-[12.5px] z-10" data-field-menu-panel>
+          <button type="button" class="block w-full text-left px-3 py-1.5 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-edit>Edit</button>
+          <button type="button" class="block w-full text-left px-3 py-1.5 text-rose-700 dark:text-rose-300 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-delete>Delete</button>
+        </div>
+      </div>
+    </div>
+    <div data-field-value-slot>
+      {% if field.type == 'text' %}
+        <input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
+      {% elif field.type == 'number' %}
+        <input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
+      {% elif field.type == 'boolean' %}
+        <input type="checkbox" {{ 'checked' if field.value }} data-field-value />
+      {% elif field.type == 'image' and imageValuePartial %}
+        {% include imageValuePartial %}
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
