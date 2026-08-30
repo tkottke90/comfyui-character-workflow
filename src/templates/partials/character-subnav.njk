@@ -1,3 +1,4 @@
+{% import "macros.njk" as ui %}
 {% set tabs = [
   {key: 'spec', label: 'Spec', href: '/characters/' + character.slug + '/spec'},
   {key: 'casting-preflight', label: 'Casting Preflight', href: '/characters/' + character.slug + '/casting/preflight'},
@@ -9,37 +10,4 @@
   {key: 'validation', label: 'Validation', href: '/characters/' + character.slug + '/validation'},
   {key: 'dataset', label: 'Dataset', href: '/characters/' + character.slug + '/dataset'}
 ] %}
-{% set activeLabel = 'Phases' %}
-{% for tab in tabs %}
-  {% if tab.key == subsection %}{% set activeLabel = tab.label %}{% endif %}
-{% endfor %}
-<div class="mb-5 border-b border-steel-200 dark:border-steel-800">
-  <div class="hidden md:flex gap-1">
-    {% for tab in tabs %}
-      <a href="{{ tab.href }}"
-         class="px-3.5 py-2 text-[13px] font-bold -mb-px border-b-2 transition-colors
-                {{ 'text-apple-800 dark:text-apple-200 border-apple-600' if subsection == tab.key else 'text-steel-500 border-transparent hover:text-steel-700 dark:hover:text-steel-300' }}">
-        {{ tab.label }}
-      </a>
-    {% endfor %}
-  </div>
-  <div class="relative md:hidden pb-2">
-    <button type="button" id="character-subnav-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="character-subnav-menu"
-      class="flex items-center justify-between w-full gap-2 px-3.5 py-2 text-[13px] font-bold rounded-md border border-steel-200 dark:border-steel-800 text-apple-800 dark:text-apple-200">
-      <span>{{ activeLabel }}</span>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
-    </button>
-    <div id="character-subnav-menu"
-      class="hidden absolute left-0 right-0 top-full z-10 mt-1 rounded-md border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 shadow-lg overflow-hidden">
-      {% for tab in tabs %}
-        <a href="{{ tab.href }}"
-           class="block px-3.5 py-2 text-[13px] font-bold transition-colors
-                  {{ 'text-apple-800 dark:text-apple-200 bg-apple-50 dark:bg-apple-950' if subsection == tab.key else 'text-steel-500 hover:text-steel-700 dark:hover:text-steel-300 hover:bg-steel-50 dark:hover:bg-steel-800' }}">
-          {{ tab.label }}
-        </a>
-      {% endfor %}
-    </div>
-  </div>
-</div>
+{{ ui.navTabs(tabs, subsection, id='character-subnav', fallbackLabel='Phases') }}

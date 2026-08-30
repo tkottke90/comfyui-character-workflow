@@ -1,0 +1,12 @@
+{% extends "layout.njk" %}
+{% set section = "manual" %}
+{% import "macros.njk" as ui %}
+{% set workspaceTab = "configuration" %}
+{% block content %}
+  {{ ui.crumbs([{label: 'Manual', href: '/manual'}, {label: session.workflowName, href: '/manual/' + session.id}, {label: 'Workspace'}]) }}
+  <h1 class="text-xl font-black tracking-tight mb-1">{{ session.workflowName }}</h1>
+  {% include "partials/manual-workspace-subnav.njk" %}
+  <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-6 text-center text-steel-500 text-[13px]">
+    Configuration coming soon.
+  </div>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% import "macros.njk" as ui %}
+{% set tabs = [
+  {key: 'configuration', label: 'Configuration', href: '/manual/' + session.id + '/workspace/configuration'},
+  {key: 'generation', label: 'Generation', href: '/manual/' + session.id + '/workspace/generation'},
+  {key: 'images', label: 'Images', href: '/manual/' + session.id + '/workspace/images'}
+] %}
+{{ ui.navTabs(tabs, workspaceTab, id='manual-workspace-subnav', fallbackLabel='Workspace') }}

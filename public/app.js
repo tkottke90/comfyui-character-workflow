@@ -379,26 +379,29 @@
     });
   });
 
-  // ---- Character subnav dropdown (below md): trigger opens the phase menu,
-  // outside click / Escape / picking a link closes it ----
-  var subnavTrigger = document.getElementById('character-subnav-trigger');
-  var subnavMenu = document.getElementById('character-subnav-menu');
-  if (subnavTrigger && subnavMenu) {
-    var setSubnavOpen = function (open) {
-      subnavMenu.classList.toggle('hidden', !open);
-      subnavTrigger.setAttribute('aria-expanded', String(open));
+  // ---- Subnav dropdown (below md): trigger opens the tab menu, outside click /
+  // Escape / picking a link closes it. [data-subnav] scoping supports any number
+  // of independent instances on a page (character phases, manual workspace tabs). ----
+  document.querySelectorAll('[data-subnav]').forEach(function (root) {
+    var trigger = root.querySelector('[data-subnav-trigger]');
+    var menu = root.querySelector('[data-subnav-menu]');
+    if (!trigger || !menu) return;
+
+    var setOpen = function (open) {
+      menu.classList.toggle('hidden', !open);
+      trigger.setAttribute('aria-expanded', String(open));
     };
-    subnavTrigger.addEventListener('click', function (event) {
+    trigger.addEventListener('click', function (event) {
       event.stopPropagation();
-      setSubnavOpen(subnavMenu.classList.contains('hidden'));
+      setOpen(menu.classList.contains('hidden'));
     });
     document.addEventListener('click', function (event) {
-      if (!subnavMenu.contains(event.target)) setSubnavOpen(false);
+      if (!menu.contains(event.target)) setOpen(false);
     });
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') setSubnavOpen(false);
+      if (event.key === 'Escape') setOpen(false);
     });
-  }
+  });
 
   // ---- Prompt Adapter: picking a preset fills the 4 editable fields (Style form and
   // Character spec builder both use this same fieldset shape) ----
