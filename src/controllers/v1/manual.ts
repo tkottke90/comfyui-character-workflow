@@ -15,6 +15,7 @@ function defaultValueForType(type: string) {
     case 'number': return 0;
     case 'boolean': return false;
     case 'image': return null;
+    case 'multiline': return '';
     default: return '';
   }
 }

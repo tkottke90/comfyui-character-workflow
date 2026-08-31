@@ -15,7 +15,7 @@
   // (on click) / `dynamic-field:image-render` (whenever a value-slot is
   // (re)built) for a page-specific listener to handle.
 
-  var TEXT_TYPES = ['text', 'number', 'boolean', 'image'];
+  var FIELD_TYPES = ['text', 'number', 'boolean', 'image', 'multiline'];
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -45,6 +45,13 @@
         // "Change" trigger in Interact mode (dynamic-field:image-edit).
         return '<p class="text-[12px] text-steel-400">Image value is set from Interact mode via "Change".</p>';
       }
+      if (field.type === 'multiline') {
+        return (
+          '<textarea rows="4" class="w-full rounded-md border border-dashed border-steel-400 dark:border-steel-600 bg-transparent px-2.5 py-1.5 text-[13px] resize-y" data-field-edit-value>' +
+          escapeHtml(field.value) +
+          '</textarea>'
+        );
+      }
       return (
         '<input type="' +
         (field.type === 'number' ? 'number' : 'text') +
@@ -69,6 +76,13 @@
     }
     if (field.type === 'boolean') {
       return '<input type="checkbox" ' + (field.value ? 'checked' : '') + ' data-field-value />';
+    }
+    if (field.type === 'multiline') {
+      return (
+        '<textarea rows="4" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px] resize-y" data-field-value>' +
+        escapeHtml(field.value) +
+        '</textarea>'
+      );
     }
     // image (and any unrecognized future type): generic placeholder only —
     // a page-specific listener paints the real thumbnail via
@@ -113,7 +127,7 @@
   }
 
   function buildEditRow(field) {
-    var typeOptions = TEXT_TYPES.map(function (type) {
+    var typeOptions = FIELD_TYPES.map(function (type) {
       return '<option value="' + type + '"' + (type === field.type ? ' selected' : '') + '>' + type + '</option>';
     }).join('');
 

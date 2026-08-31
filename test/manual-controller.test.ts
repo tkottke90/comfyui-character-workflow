@@ -55,6 +55,19 @@ describe('manual field CRUD + image upload + asset serving', () => {
 
       expect(res.status).to.equal(400);
     });
+
+    it('creates a multiline field defaulting to an empty string', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'prompt', type: 'multiline' }),
+      });
+
+      expect(res.status).to.equal(201);
+      const field = (await res.json()) as { type: string; value: unknown };
+      expect(field.type).to.equal('multiline');
+      expect(field.value).to.equal('');
+    });
   });
 
   describe('PATCH /api/v1/manual/:id/fields/:fieldId', () => {
@@ -128,6 +141,18 @@ describe('manual field CRUD + image upload + asset serving', () => {
       });
 
       expect(res.status).to.equal(400);
+    });
+
+    it('round-trips a multiline value with embedded newlines', async () => {
+      const field = await createField('prompt', 'multiline');
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${field.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: 'line one\nline two' }),
+      });
+
+      const updated = (await res.json()) as { value: unknown };
+      expect(updated.value).to.equal('line one\nline two');
     });
   });
 

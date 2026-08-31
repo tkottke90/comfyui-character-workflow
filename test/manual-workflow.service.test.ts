@@ -33,6 +33,11 @@ describe('manual-workflow.service schemas', () => {
     it('rejects an unknown type', () => {
       expect(() => ManualFieldSchema.parse({ key: 'a', type: 'color', value: '#fff' })).to.throw();
     });
+
+    it('accepts a multiline type with a string value', () => {
+      const field = ManualFieldSchema.parse({ key: 'prompt', type: 'multiline', value: 'line one\nline two' });
+      expect(field.value).to.equal('line one\nline two');
+    });
   });
 
   describe('ManualGenerationSchema', () => {

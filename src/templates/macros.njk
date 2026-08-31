@@ -177,6 +177,8 @@
         <input type="checkbox" {{ 'checked' if field.value }} data-field-value />
       {% elif field.type == 'image' and imageValuePartial %}
         {% include imageValuePartial %}
+      {% elif field.type == 'multiline' %}
+        <textarea rows="4" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px] resize-y" data-field-value>{{ field.value }}</textarea>
       {% endif %}
     </div>
   </div>

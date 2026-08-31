@@ -28,7 +28,7 @@ const SessionNoteSchema = z.object({
 export const ManualFieldSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   key: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Key must be alphanumeric/underscore only'),
-  type: z.enum(['text', 'number', 'boolean', 'image']),
+  type: z.enum(['text', 'number', 'boolean', 'image', 'multiline']),
   value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
   createdAt: DefaultDateSchema,
   updatedAt: DefaultDateSchema
