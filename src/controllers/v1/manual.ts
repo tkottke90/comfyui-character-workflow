@@ -188,6 +188,32 @@ export function createManualWorkflowAPI(app: Application) {
   });
 
   /**
+   * Move a field up or down by swapping it with its adjacent sibling
+   */
+  manualRouter.post('/:id/fields/:fieldId/move', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    const direction = String(req.body.direction ?? '');
+    if (direction !== 'up' && direction !== 'down') {
+      throw new BadRequestError('direction must be "up" or "down"');
+    }
+
+    const index = session.fields.findIndex((f) => f.id === req.params.fieldId);
+    if (index === -1) throw new NotFoundError('Field not found');
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= session.fields.length) {
+      res.status(200).json({ moved: false });
+      return;
+    }
+
+    const fields = [...session.fields];
+    [fields[index], fields[swapIndex]] = [fields[swapIndex], fields[index]];
+    await app.manualWorkflows.updateSession(session.id, { fields });
+
+    res.status(200).json({ moved: true });
+  });
+
+  /**
    * Delete a field
    */
   manualRouter.delete('/:id/fields/:fieldId', async (req: Request, res: Response) => {

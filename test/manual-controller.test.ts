@@ -156,6 +156,89 @@ describe('manual field CRUD + image upload + asset serving', () => {
     });
   });
 
+  describe('POST /api/v1/manual/:id/fields/:fieldId/move', () => {
+    async function createField(key: string) {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, type: 'text' }),
+      });
+      return (await res.json()) as { id: string; key: string };
+    }
+
+    async function move(fieldId: string, direction: string) {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${fieldId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      });
+      return res;
+    }
+
+    async function keysInOrder() {
+      const session = await app.manualWorkflows.getSession(sessionId);
+      const json = session.toJSON() as { fields: { key: string }[] };
+      return json.fields.map((f) => f.key);
+    }
+
+    it('moves a field up, swapping it with its predecessor', async () => {
+      await createField('a');
+      await createField('b');
+      const c = await createField('c');
+
+      const res = await move(c.id, 'up');
+
+      expect(res.status).to.equal(200);
+      expect(await res.json()).to.deep.equal({ moved: true });
+      expect(await keysInOrder()).to.deep.equal(['a', 'c', 'b']);
+    });
+
+    it('moves a field down, swapping it with its successor', async () => {
+      const a = await createField('a');
+      await createField('b');
+      await createField('c');
+
+      const res = await move(a.id, 'down');
+
+      expect(res.status).to.equal(200);
+      expect(await res.json()).to.deep.equal({ moved: true });
+      expect(await keysInOrder()).to.deep.equal(['b', 'a', 'c']);
+    });
+
+    it('is a no-op when moving the first field up', async () => {
+      const a = await createField('a');
+      await createField('b');
+
+      const res = await move(a.id, 'up');
+
+      expect(res.status).to.equal(200);
+      expect(await res.json()).to.deep.equal({ moved: false });
+      expect(await keysInOrder()).to.deep.equal(['a', 'b']);
+    });
+
+    it('is a no-op when moving the last field down', async () => {
+      await createField('a');
+      const b = await createField('b');
+
+      const res = await move(b.id, 'down');
+
+      expect(res.status).to.equal(200);
+      expect(await res.json()).to.deep.equal({ moved: false });
+      expect(await keysInOrder()).to.deep.equal(['a', 'b']);
+    });
+
+    it('returns 404 for an unknown fieldId', async () => {
+      const res = await move('does-not-exist', 'up');
+      expect(res.status).to.equal(404);
+    });
+
+    it('returns 400 for an invalid direction', async () => {
+      const a = await createField('a');
+      const res = await move(a.id, 'sideways');
+      expect(res.status).to.equal(400);
+    });
+  });
+
   describe('DELETE /api/v1/manual/:id/fields/:fieldId', () => {
     it('deletes a field', async () => {
       const created = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields`, {

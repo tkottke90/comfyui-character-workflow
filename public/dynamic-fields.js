@@ -114,6 +114,8 @@
       '<div class="relative" data-field-menu>' +
       '<button type="button" class="text-steel-400 hover:text-steel-600 text-[13px] px-1" data-field-menu-trigger>⋯</button>' +
       '<div class="hidden absolute right-0 mt-1 bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-md shadow-sm text-[12.5px] z-10" data-field-menu-panel>' +
+      '<button type="button" class="block w-full text-left px-3 py-1.5 hover:bg-steel-50 dark:hover:bg-steel-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" data-field-move-up>Move Up</button>' +
+      '<button type="button" class="block w-full text-left px-3 py-1.5 hover:bg-steel-50 dark:hover:bg-steel-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" data-field-move-down>Move Down</button>' +
       '<button type="button" class="block w-full text-left px-3 py-1.5 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-edit>Edit</button>' +
       '<button type="button" class="block w-full text-left px-3 py-1.5 text-rose-700 dark:text-rose-300 hover:bg-steel-50 dark:hover:bg-steel-700" data-field-delete>Delete</button>' +
       '</div>' +
@@ -207,12 +209,24 @@
     return control.value;
   }
 
+  function updateMoveButtons(list) {
+    var rows = list.querySelectorAll('[data-field-row]');
+    Array.prototype.forEach.call(rows, function (row, i) {
+      var upBtn = row.querySelector('[data-field-move-up]');
+      var downBtn = row.querySelector('[data-field-move-down]');
+      if (upBtn) upBtn.disabled = i === 0;
+      if (downBtn) downBtn.disabled = i === rows.length - 1;
+    });
+  }
+
   document.querySelectorAll('[data-dynamic-field-form]').forEach(function (root) {
     var endpoint = root.getAttribute('data-fields-endpoint');
     if (!endpoint) return;
     var list = root.querySelector('[data-fields-list]');
     var addBtn = root.querySelector('[data-add-field]');
     if (!list || !addBtn) return;
+
+    updateMoveButtons(list);
 
     function commitEdit(row) {
       var fieldId = row.getAttribute('data-field-id');
@@ -255,6 +269,7 @@
         wrapper.innerHTML = buildEditRow(field).trim();
         var row = wrapper.firstElementChild;
         list.appendChild(row);
+        updateMoveButtons(list);
         var keyInput = row.querySelector('[data-field-edit-key]');
         if (keyInput) keyInput.focus();
       });
@@ -296,10 +311,31 @@
         request('DELETE', endpoint + '/' + fieldId)
           .then(function () {
             deleteRow.remove();
+            updateMoveButtons(list);
           })
           .catch(function () {
             deleteRow.remove();
+            updateMoveButtons(list);
           });
+        return;
+      }
+
+      var moveTrigger = event.target.closest('[data-field-move-up], [data-field-move-down]');
+      if (moveTrigger) {
+        var moveRow = moveTrigger.closest('[data-field-row]');
+        var moveFieldId = moveRow.getAttribute('data-field-id');
+        var direction = moveTrigger.hasAttribute('data-field-move-up') ? 'up' : 'down';
+        var movePanel = moveTrigger.closest('[data-field-menu-panel]');
+        if (movePanel) movePanel.classList.add('hidden');
+
+        request('POST', endpoint + '/' + moveFieldId + '/move', { direction: direction }).then(function (result) {
+          if (!result || !result.moved) return;
+          var sibling = direction === 'up' ? moveRow.previousElementSibling : moveRow.nextElementSibling;
+          if (!sibling) return;
+          if (direction === 'up') list.insertBefore(moveRow, sibling);
+          else list.insertBefore(sibling, moveRow);
+          updateMoveButtons(list);
+        });
         return;
       }
 
