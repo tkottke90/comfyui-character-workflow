@@ -15,11 +15,11 @@
     </div>
 
     <div class="md:basis-3/5 flex flex-col gap-4">
-      {% call ui.card('Actions') %}
+      <div class="flex justify-end">
         <span title="Workflow field mapping isn't available yet — coming in a follow-up update.">
           {{ ui.button('Generate', 'primary', 'button', true) }}
         </span>
-      {% endcall %}
+      </div>
 
       {% call ui.card('Outputs') %}
         {% if doneGenerations.length == 0 %}

@@ -47,9 +47,22 @@
   });
 
   function buildPanel(sessionId, images, currentValue) {
-    var options = images
+    // Grid of thumbnails to pick from, styled after the "Choose from library"
+    // picker on the character refinement page (see refinement.njk).
+    var tiles = images
       .map(function (image) {
-        return '<option value="' + image.id + '"' + (image.id === currentValue ? ' selected' : '') + '>' + image.filename + '</option>';
+        var selected = image.id === currentValue;
+        return (
+          '<button type="button" data-panel-tile data-image-id="' +
+          image.id +
+          '" class="block w-full aspect-square rounded-md overflow-hidden border ' +
+          (selected ? 'ring-2 ring-apple-500 border-apple-500' : 'border-steel-300 dark:border-steel-700') +
+          '"><img src="/manual/' +
+          sessionId +
+          '/assets/' +
+          image.filename +
+          '" class="w-full h-full object-cover" alt="" /></button>'
+        );
       })
       .join('');
 
@@ -67,9 +80,7 @@
       '</div>' +
       '<div data-panel-mode="select" class="mb-2 hidden">' +
       (images.length
-        ? '<select class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[12.5px]" data-panel-select>' +
-          options +
-          '</select>'
+        ? '<div class="grid grid-cols-3 gap-2" data-panel-grid data-selected-image-id="' + (currentValue || '') + '">' + tiles + '</div>'
         : '<p class="text-[12px] text-steel-400">No images in this session yet.</p>') +
       '</div>' +
       '<div class="text-[12px] text-rose-700 dark:text-rose-300 mb-2 hidden" data-panel-error></div>' +
@@ -87,6 +98,22 @@
         });
       });
     });
+
+    var grid = panel.querySelector('[data-panel-grid]');
+    if (grid) {
+      grid.addEventListener('click', function (event) {
+        var tile = event.target.closest('[data-panel-tile]');
+        if (!tile) return;
+        grid.setAttribute('data-selected-image-id', tile.getAttribute('data-image-id'));
+        grid.querySelectorAll('[data-panel-tile]').forEach(function (t) {
+          t.classList.toggle('ring-2', t === tile);
+          t.classList.toggle('ring-apple-500', t === tile);
+          t.classList.toggle('border-apple-500', t === tile);
+          t.classList.toggle('border-steel-300', t !== tile);
+          t.classList.toggle('dark:border-steel-700', t !== tile);
+        });
+      });
+    }
 
     return panel;
   }
@@ -122,12 +149,13 @@
       var mode = panel.querySelector('input[name="mode"]:checked').value;
 
       if (mode === 'select') {
-        var select = panel.querySelector('[data-panel-select]');
-        if (!select || !select.value) {
+        var grid = panel.querySelector('[data-panel-grid]');
+        var selectedImageId = grid ? grid.getAttribute('data-selected-image-id') : '';
+        if (!selectedImageId) {
           showError('Choose an image.');
           return;
         }
-        event.detail.resolve(select.value);
+        event.detail.resolve(selectedImageId);
         panel.remove();
         return;
       }
@@ -153,6 +181,12 @@
             });
           })
           .then(function (image) {
+            // The newly uploaded image isn't in the session-images cache this
+            // page loaded with, so the thumbnail painted after resolve()
+            // wouldn't find it — add it before resolving.
+            ctx.images.push(image);
+            var scope = row.closest('[data-session-id]');
+            if (scope) scope.setAttribute('data-session-images', JSON.stringify(ctx.images));
             event.detail.resolve(image.id);
             panel.remove();
           })

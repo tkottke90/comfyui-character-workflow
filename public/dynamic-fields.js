@@ -48,21 +48,21 @@
       return (
         '<input type="' +
         (field.type === 'number' ? 'number' : 'text') +
-        '" class="w-full rounded-md border border-dashed border-steel-400 dark:border-steel-600 px-2.5 py-1.5 text-[13px]" value="' +
+        '" class="w-full rounded-md border border-dashed border-steel-400 dark:border-steel-600 bg-transparent px-2.5 py-1.5 text-[13px]" value="' +
         escapeHtml(field.value) +
         '" data-field-edit-value />'
       );
     }
     if (field.type === 'text') {
       return (
-        '<input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="' +
+        '<input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px]" value="' +
         escapeHtml(field.value) +
         '" data-field-value />'
       );
     }
     if (field.type === 'number') {
       return (
-        '<input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="' +
+        '<input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px]" value="' +
         escapeHtml(field.value) +
         '" data-field-value />'
       );
@@ -127,10 +127,10 @@
       '" data-field-editing>' +
       '<div class="border-2 border-dashed border-steel-400 dark:border-steel-600 rounded-lg p-2.5" data-field-edit-form>' +
       '<div class="flex gap-2 mb-2">' +
-      '<input type="text" class="flex-1 rounded-md border border-dashed border-steel-400 dark:border-steel-600 px-2.5 py-1.5 text-[13px]" value="' +
+      '<input type="text" class="flex-1 rounded-md border border-dashed border-steel-400 dark:border-steel-600 bg-transparent px-2.5 py-1.5 text-[13px]" value="' +
       escapeHtml(field.key) +
       '" placeholder="key" data-field-edit-key />' +
-      '<select class="rounded-md border border-dashed border-steel-400 dark:border-steel-600 px-2.5 py-1.5 text-[13px]" data-field-edit-type>' +
+      '<select class="rounded-md border border-dashed border-steel-400 dark:border-steel-600 bg-transparent px-2.5 py-1.5 text-[13px]" data-field-edit-type>' +
       typeOptions +
       '</select>' +
       '</div>' +

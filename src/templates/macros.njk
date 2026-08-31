@@ -170,9 +170,9 @@
     </div>
     <div data-field-value-slot>
       {% if field.type == 'text' %}
-        <input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
+        <input type="text" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
       {% elif field.type == 'number' %}
-        <input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
+        <input type="number" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px]" value="{{ field.value }}" data-field-value />
       {% elif field.type == 'boolean' %}
         <input type="checkbox" {{ 'checked' if field.value }} data-field-value />
       {% elif field.type == 'image' and imageValuePartial %}
