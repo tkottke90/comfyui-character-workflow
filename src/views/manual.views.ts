@@ -4,7 +4,7 @@ import { createWorkflowMappingService } from '../services/workflow-mapping.servi
 import { getWorkflowSlot } from '../comfy/workflow-registry';
 import { sanitizeSegment } from '@/lib/path-sanitize';
 import { NotFoundError } from '@/errors/http.errors';
-import type { ManualWorkflowSession } from '@/services/manual-workflow.service';
+import type { ManualImage, ManualWorkflowSession } from '@/services/manual-workflow.service';
 
 export function createManualViewRouter(router: Router) {
 
@@ -103,17 +103,32 @@ export function createManualViewRouter(router: Router) {
 
   router.get('/:id/workspace/images', async (req: Request, res: Response) => {
     const session = await req.app.manualWorkflows.getSession(req.params.id.toString());
+    const sessionJson = session.toJSON() as ManualWorkflowSession;
+    const images = [...sessionJson.images].sort(SortImages);
 
     res.render('manual/workspace/images.njk', {
-      session: session.toJSON()
+      session: sessionJson,
+      images
     });
+  });
+
+  router.post('/:id/workspace/images/:imageId/delete', async (req: Request, res: Response) => {
+    await req.app.manualWorkflows.deleteImage(req.params.id.toString(), req.params.imageId.toString());
+    res.redirect(`/manual/${req.params.id}/workspace/images`);
   });
 
   router.get('/:id', async (req: Request, res: Response) => {
     const session = await req.app.manualWorkflows.getSession(req.params.id.toString());
+    const sessionData = session.toJSON() as ManualWorkflowSession;
+    const recentImages = [...sessionData.images].sort(SortImages).slice(0, 5);
 
     res.render('manual/detail.njk', {
-      workflow: session.toJSON()
+      workflow: sessionData,
+      recentImages
     });
   });
+}
+
+function SortImages(a: ManualImage, b: ManualImage) {
+  return b.createdAt.getTime() - a.createdAt.getTime();
 }

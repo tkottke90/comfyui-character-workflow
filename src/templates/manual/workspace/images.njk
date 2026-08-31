@@ -6,7 +6,31 @@
   {{ ui.crumbs([{label: 'Manual', href: '/manual'}, {label: session.workflowName, href: '/manual/' + session.id}, {label: 'Workspace'}]) }}
   <h1 class="text-xl font-black tracking-tight mb-1">{{ session.workflowName }}</h1>
   {% include "partials/manual-workspace-subnav.njk" %}
-  <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-6 text-center text-steel-500 text-[13px]">
-    Images coming soon.
-  </div>
+
+  {% if images.length == 0 %}
+    <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-8 text-center text-steel-500">
+      No images yet.
+    </div>
+  {% else %}
+    <div class="flex items-center justify-end mb-4">
+      {{ ui.mono(images.length ~ ' images') }}
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {% for image in images %}
+        <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden">
+          <div class="aspect-[3/4] relative overflow-hidden">
+            <img src="/manual/{{ session.id }}/assets/{{ image.filename }}"
+              data-viewer-trigger data-viewer-group="workspace-images" class="absolute inset-0 w-full h-full object-cover" alt="" />
+          </div>
+          <div class="p-2.5">
+            <div class="mb-1.5 text-[12px] text-steel-500">{{ ui.mono(image.createdAt.toISOString().slice(0, 16).replace('T', ' ')) }}</div>
+            <form method="post" action="/manual/{{ session.id }}/workspace/images/{{ image.id }}/delete"
+              onsubmit="return confirm('Delete this image? This cannot be undone.');">
+              <button type="submit" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 {% endblock %}

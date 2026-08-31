@@ -62,7 +62,7 @@
           </div>
         {% else %}
           <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
-            {% for image in workflow.images %}
+            {% for image in recentImages %}
               <div class="aspect-square rounded-md overflow-hidden relative">
                 <img src="/manual/{{ workflow.id }}/assets/{{ image.filename }}" class="w-full h-full object-cover" alt="" />
                 {% if image.final %}

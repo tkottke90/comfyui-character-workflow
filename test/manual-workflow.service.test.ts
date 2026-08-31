@@ -102,4 +102,43 @@ describe('ManualWorkflowRegistry — fields persistence', () => {
     const json = reloaded.toJSON() as { fields: unknown[] };
     expect(json.fields).to.have.length(1);
   });
+
+  describe('deleteImage', () => {
+    it('removes the image record and its file from disk', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 } });
+      const assetPath = path.join(session.workflowDir, 'assets', image.filename);
+      fs.writeFileSync(assetPath, 'fake image bytes');
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.deleteImage(session.id, image.id);
+
+      expect(result).to.deep.equal({ deleted: true });
+      expect(fs.existsSync(assetPath)).to.equal(false);
+
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images).to.deep.equal([]);
+    });
+
+    it('is idempotent for an unknown imageId', async () => {
+      const session = await registry.addSession('Test Session');
+
+      const result = await registry.deleteImage(session.id, 'does-not-exist');
+
+      expect(result).to.deep.equal({ deleted: false });
+    });
+
+    it('does not throw when the file is already missing on disk', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 } });
+      await registry.updateSession(session.id, { images: [image] });
+      // No file written for this image — simulates an out-of-band deletion.
+
+      const result = await registry.deleteImage(session.id, image.id);
+
+      expect(result).to.deep.equal({ deleted: true });
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images).to.deep.equal([]);
+    });
+  });
 });

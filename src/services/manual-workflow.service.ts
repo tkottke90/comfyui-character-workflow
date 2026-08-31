@@ -80,6 +80,7 @@ export type ManualWorkflowUpdateSession = z.infer<typeof UploadSessionSchema>;
 export type ManualWorkflowConfig = z.infer<typeof ManualWorkflowSchema>;
 export type ManualField = z.infer<typeof ManualFieldSchema>;
 export type ManualGeneration = z.infer<typeof ManualGenerationSchema>;
+export type ManualImage = z.infer<typeof ImageSchema>;
 
 export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWorkflowSchema>> {
   static readonly SCHEMA = ManualWorkflowSchema;
@@ -169,7 +170,28 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
     return updatedDetails;
   }
 
-  
+  /**
+   * Deletes a single image from a session's gallery and removes its file from disk.
+   * Idempotent: deleting an unknown imageId or an already-missing file is not an error.
+   * @param id ID of the session
+   * @param imageId ID of the image to delete
+   */
+  async deleteImage(id: string, imageId: string): Promise<{ deleted: boolean }> {
+    const sessionPath = this.checkForSession(id);
+    const session = await this.loadSession(sessionPath);
+    const image = session.images.find((img) => img.id === imageId);
+
+    if (!image) return { deleted: false };
+
+    await rm(path.join(session.workflowDir, 'assets', image.filename), { force: true });
+
+    const images = session.images.filter((img) => img.id !== imageId);
+    await this.updateSession(id, { images });
+
+    return { deleted: true };
+  }
+
+
   toJSON() {
     const data = this.mapper.parse({
       ...this,
