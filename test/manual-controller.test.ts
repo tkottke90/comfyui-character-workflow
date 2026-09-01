@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { createTestApp, TestApp } from './support/manual-test-app';
+import { ManualGenerationSchema } from '../src/services/manual-workflow.service';
 
 const ONE_PIXEL_PNG_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -154,6 +155,63 @@ describe('manual field CRUD + image upload + asset serving', () => {
       const updated = (await res.json()) as { value: unknown };
       expect(updated.value).to.equal('line one\nline two');
     });
+
+    it('saves a mappings array for a field', async () => {
+      const field = await createField('prompt', 'text');
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${field.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'text', classType: 'CLIPTextEncode' }],
+        }),
+      });
+
+      expect(res.status).to.equal(200);
+      const updated = (await res.json()) as { mappings: unknown[] };
+      expect(updated.mappings).to.deep.equal([
+        { nodeId: '1', inputName: 'text', classType: 'CLIPTextEncode' },
+      ]);
+    });
+
+    it('rejects mapping an input that another field already claims', async () => {
+      const first = await createField('a', 'text');
+      const second = await createField('b', 'text');
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${first.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'text', classType: 'CLIPTextEncode' }],
+        }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${second.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'text', classType: 'CLIPTextEncode' }],
+        }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+
+    it('re-saving the same field\'s own mappings is not treated as a conflict', async () => {
+      const field = await createField('a', 'text');
+      const mapping = { nodeId: '1', inputName: 'text', classType: 'CLIPTextEncode' };
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${field.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mappings: [mapping] }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${field.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mappings: [mapping] }),
+      });
+
+      expect(res.status).to.equal(200);
+    });
   });
 
   describe('POST /api/v1/manual/:id/fields/:fieldId/move', () => {
@@ -263,6 +321,7 @@ describe('manual field CRUD + image upload + asset serving', () => {
       });
       expect(res.status).to.equal(404);
     });
+
   });
 
   describe('POST /api/v1/manual/:id/images', () => {
@@ -297,6 +356,184 @@ describe('manual field CRUD + image upload + asset serving', () => {
     });
   });
 
+  describe('GET /api/v1/manual/:id/workflow-inputs', () => {
+    it('returns an empty list when no workflow is attached', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/workflow-inputs`);
+      expect(res.status).to.equal(200);
+      const body = (await res.json()) as { inputs: unknown[] };
+      expect(body.inputs).to.deep.equal([]);
+    });
+
+    it('returns every mappable widget input parsed from the attached workflow', async () => {
+      const graph = {
+        '1': {
+          class_type: 'CLIPTextEncode',
+          inputs: { text: 'a placeholder prompt' },
+          _meta: { title: 'Positive Prompt' },
+        },
+      };
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/set-workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'upload',
+          workflowJsonDataUrl: `data:application/json;base64,${Buffer.from(JSON.stringify(graph)).toString('base64')}`,
+        }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/workflow-inputs`);
+      expect(res.status).to.equal(200);
+      const body = (await res.json()) as { inputs: Array<{ nodeId: string; inputName: string }> };
+      expect(body.inputs).to.have.length(1);
+      expect(body.inputs[0]).to.deep.include({ nodeId: '1', inputName: 'text' });
+    });
+  });
+
+  describe('POST /api/v1/manual/:id/result-output', () => {
+    it('sets the result output node/index', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/result-output`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: '4', outputIndex: 0 }),
+      });
+
+      expect(res.status).to.equal(200);
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.resultOutput).to.deep.equal({ nodeId: '4', outputIndex: 0 });
+    });
+
+    it('rejects a missing nodeId with 400', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/result-output`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputIndex: 0 }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe('PATCH /api/v1/manual/:id/seed-mapping', () => {
+    it('saves a mappings array for Seed', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/seed-mapping`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'seed', classType: 'KSampler' }],
+        }),
+      });
+
+      expect(res.status).to.equal(200);
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.seedMappings).to.deep.equal([
+        { nodeId: '1', inputName: 'seed', classType: 'KSampler' },
+      ]);
+    });
+
+    it('rejects mapping an input a field already claims', async () => {
+      const created = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'a', type: 'number' }),
+      });
+      const field = (await created.json()) as { id: string };
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${field.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'seed', classType: 'KSampler' }],
+        }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/seed-mapping`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'seed', classType: 'KSampler' }],
+        }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+
+    it('a field mapping an input Seed already claims is also rejected', async () => {
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/seed-mapping`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'seed', classType: 'KSampler' }],
+        }),
+      });
+      const created = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'a', type: 'number' }),
+      });
+      const field = (await created.json()) as { id: string };
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/fields/${field.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [{ nodeId: '1', inputName: 'seed', classType: 'KSampler' }],
+        }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe('GET /api/v1/manual/:id/output-nodes', () => {
+    it('returns an empty list when no workflow is attached', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/output-nodes`);
+      expect(res.status).to.equal(200);
+      const body = (await res.json()) as { candidates: unknown[]; allNodeIds: unknown[] };
+      expect(body.candidates).to.deep.equal([]);
+      expect(body.allNodeIds).to.deep.equal([]);
+    });
+
+    it('returns candidate output nodes and every node id from the attached workflow', async () => {
+      const graph = {
+        '1': {
+          class_type: 'CLIPTextEncode',
+          inputs: { text: 'a placeholder prompt' },
+          _meta: { title: 'Positive Prompt' },
+        },
+        '4': {
+          class_type: 'SaveImage',
+          inputs: { filename_prefix: 'ComfyUI' },
+          _meta: { title: 'Save Image' },
+        },
+      };
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/set-workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'upload',
+          workflowJsonDataUrl: `data:application/json;base64,${Buffer.from(JSON.stringify(graph)).toString('base64')}`,
+        }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/output-nodes`);
+      expect(res.status).to.equal(200);
+      const body = (await res.json()) as { candidates: Array<{ nodeId: string }>; allNodeIds: string[] };
+      expect(body.candidates.map((c) => c.nodeId)).to.deep.equal(['4']);
+      expect(body.allNodeIds.sort()).to.deep.equal(['1', '4']);
+    });
+  });
+
+  describe('POST /api/v1/manual/:id/generate', () => {
+    it('rejects a missing/non-numeric seed with 400', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+  });
+
   describe('GET /manual/:id/assets/:filename', () => {
     it('returns 400 for a path-traversal-shaped filename', async () => {
       const res = await fetch(`${app.baseUrl}/manual/${sessionId}/assets/..%2Fmetadata.json`);
@@ -317,7 +554,7 @@ describe('manual field CRUD + image upload + asset serving', () => {
       expect(res.status).to.equal(200);
       expect(html).to.include('No generations yet.');
       expect(html).to.include('disabled');
-      expect(html).to.include("Workflow field mapping isn't available yet");
+      expect(html).to.include('Attach a workflow and set a Result Output on the Configuration tab first');
     });
 
     it('renders all four field types in Interact mode', async () => {
@@ -378,6 +615,52 @@ describe('manual field CRUD + image upload + asset serving', () => {
 
       expect(html).to.include(`<img src="/manual/${sessionId}/assets/${image.filename}"`);
       expect(html).to.not.include('No image');
+    });
+
+    it('renders a "Generating…" tile for a single queued generation, keyed by its own id', async () => {
+      await app.manualWorkflows.updateSession(sessionId, {
+        generations: [
+          ManualGenerationSchema.parse({ id: 'gen-1', status: 'queued', fieldValuesSnapshot: {}, seed: 5 }),
+        ],
+      });
+
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/generation`);
+      const html = await res.text();
+
+      expect(html).to.include('Generating…');
+      expect(html).to.include('data-tile-key="gen-1"');
+      expect(html).to.include('data-sse-tiles');
+    });
+
+    it('renders one "Generating…" tile per unsettled batch sub-generation, keyed by its own seed', async () => {
+      await app.manualWorkflows.updateSession(sessionId, {
+        generations: [
+          ManualGenerationSchema.parse({
+            id: 'gen-1',
+            status: 'done',
+            batchId: 'batch-1',
+            fieldValuesSnapshot: {},
+            seed: 10,
+          }),
+          ManualGenerationSchema.parse({
+            id: 'gen-2',
+            status: 'running',
+            batchId: 'batch-1',
+            fieldValuesSnapshot: {},
+            seed: 11,
+          }),
+        ],
+      });
+
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/generation`);
+      const html = await res.text();
+
+      expect(html).to.include('Generating…');
+      expect(html).to.include('data-tile-key="11"');
+      // The done sibling is settled (and has no resolvable image), so it renders in
+      // neither the live-tile section nor doneGenerations — any number of jobs can be
+      // in flight per session now, each shown only while queued/running.
+      expect(html).to.not.include('data-tile-key="10"');
     });
   });
 });

@@ -27,4 +27,58 @@
       {% include "partials/manual-workflow-form.njk" %}
     {% endcall %}
   {% endif %}
+
+  {% if session.workflowFile %}
+    <div class="mt-4 flex flex-col gap-4">
+      {% call ui.card('Field Mapping') %}
+        <div data-field-mapping-list data-workflow-inputs-endpoint="/api/v1/manual/{{ session.id }}/workflow-inputs"
+             data-output-nodes-endpoint="/api/v1/manual/{{ session.id }}/output-nodes"
+             data-result-output-endpoint="/api/v1/manual/{{ session.id }}/result-output"
+             data-fields-endpoint="/api/v1/manual/{{ session.id }}/fields">
+
+          <div class="flex items-center justify-between py-2 border-b border-steel-100 dark:border-steel-800"
+               data-mapping-row data-mapping-kind="seed"
+               data-mapping-endpoint="/api/v1/manual/{{ session.id }}/seed-mapping"
+               data-field-mappings="{{ session.seedMappings | dump }}">
+            <span class="text-[13px] font-semibold">Seed</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[11.5px] text-steel-500" data-mapping-summary>
+                {{ session.seedMappings.length }} input{{ 's' if session.seedMappings.length != 1 }} mapped
+              </span>
+              <button type="button" class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300" data-mapping-edit>Map…</button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between py-2 border-b border-steel-100 dark:border-steel-800" data-output-row>
+            <span class="text-[13px] font-semibold">Result Output</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[11.5px] text-steel-500" data-output-summary>
+                {{ ui.mono(session.resultOutput.nodeId + ' → ' + session.resultOutput.outputIndex) if session.resultOutput else 'Not set' }}
+              </span>
+              <button type="button" class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300" data-output-edit>Map…</button>
+            </div>
+          </div>
+
+          {% if session.fields.length == 0 %}
+            <p class="text-[13px] text-steel-500 mt-2">No fields yet — add fields on the Generation tab first.</p>
+          {% else %}
+            {% for field in session.fields %}
+              <div class="flex items-center justify-between py-2 border-b border-steel-100 dark:border-steel-800 last:border-b-0" data-mapping-row data-field-id="{{ field.id }}" data-field-mappings="{{ field.mappings | dump }}">
+                <div>
+                  <span class="text-[13px] font-semibold">{{ field.key }}</span>
+                  <span class="text-[11px] text-steel-400 ml-1">{{ field.type }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11.5px] text-steel-500" data-mapping-summary>
+                    {{ field.mappings.length }} input{{ 's' if field.mappings.length != 1 }} mapped
+                  </span>
+                  <button type="button" class="text-[12.5px] font-semibold text-apple-700 dark:text-apple-300" data-mapping-edit>Map…</button>
+                </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      {% endcall %}
+    </div>
+  {% endif %}
 {% endblock %}

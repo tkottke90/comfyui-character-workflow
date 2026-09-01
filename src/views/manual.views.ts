@@ -4,7 +4,8 @@ import { createWorkflowMappingService } from '../services/workflow-mapping.servi
 import { getWorkflowSlot } from '../comfy/workflow-registry';
 import { sanitizeSegment } from '@/lib/path-sanitize';
 import { NotFoundError } from '@/errors/http.errors';
-import type { ManualImage, ManualWorkflowSession } from '@/services/manual-workflow.service';
+import type { ManualGeneration, ManualImage, ManualWorkflowSession } from '@/services/manual-workflow.service';
+import { isJobActive } from '@/services/manual-execution.service';
 
 export function createManualViewRouter(router: Router) {
 
@@ -71,6 +72,16 @@ export function createManualViewRouter(router: Router) {
       (generation) => generation.status === 'done' && imagesById[generation.imageId ?? '']
     );
 
+    // Every generation not yet settled, independent of whether it belongs to a batch —
+    // any number of jobs can be in flight for this session at once now, each tracked
+    // through its own job-store slot. Each renders its own live tile matching
+    // sse-client.js's `data-live-tile data-tile-key="..."` contract; once a generation
+    // settles, the next page load naturally omits it here and shows it via
+    // `doneGenerations` instead — no explicit hand-off needed.
+    const liveGenerations: Array<ManualGeneration & { image?: ManualImage }> = sessionJson.generations
+      .filter((g) => g.status === 'queued' || g.status === 'running')
+      .map((g) => ({ ...g, image: g.imageId ? imagesById[g.imageId] : undefined }));
+
     // `ui.dynamicFieldForm()` is imported without `with context` (deliberately —
     // the macro is meant to be reusable by pages with a completely different
     // context shape), so its `imageValuePartial` hook can't reach ambient
@@ -88,8 +99,46 @@ export function createManualViewRouter(router: Router) {
       session: sessionJson,
       fields,
       imagesById,
-      doneGenerations
+      doneGenerations,
+      liveGenerations
     });
+  });
+
+  router.get('/:id/events', async (req: Request, res: Response) => {
+    const session = await req.app.manualWorkflows.getSession(req.params.id.toString());
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.flushHeaders();
+
+    // Any number of jobs (single generations and/or batches) can be in flight for this
+    // session at once, each in its own job-store slot — so this stream is multiplexed:
+    // every broadcast is a fresh snapshot of every currently-active job, plus whichever
+    // job just changed (even into a settled state), so a job's final done/error
+    // transition is always delivered at least once even though it then drops out of
+    // future snapshots. Unlike the character pipeline's per-job SSE route, this
+    // connection never closes on its own — new jobs can be submitted at any time the
+    // page is open.
+    const snapshot = (justChangedKey?: string) =>
+      req.app.manualJobStore.listAll()
+        .filter((entry) => entry.characterSlug === session.id)
+        .filter((entry) => isJobActive(entry.record) || entry.phaseBindingKey === justChangedKey)
+        .map((entry) => entry.record);
+
+    const send = (justChangedKey?: string) => {
+      res.write(`data: ${JSON.stringify({ jobs: snapshot(justChangedKey) })}\n\n`);
+    };
+
+    // Emit the current known state immediately on connect — a page reload opens a
+    // brand-new connection and must see where things actually stand right now, not
+    // only future transitions (see the character pipeline's identical SSE route).
+    send();
+
+    const unsubscribe = req.app.manualJobStore.onAnyChange(session.id, (key) => send(key));
+    req.on('close', () => unsubscribe());
   });
 
   router.get('/:id/assets/:filename', async (req: Request, res: Response, next: NextFunction) => {

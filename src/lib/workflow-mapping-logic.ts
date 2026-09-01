@@ -117,19 +117,26 @@ export interface OutputNodeCandidate {
 const OUTPUT_NODE_KEYWORDS = ['save', 'preview'];
 
 /**
- * Nodes in this version that are plausible "result output" nodes — anything whose
- * class type or title suggests it saves/previews an image (SaveImage, PreviewImage,
- * and the various custom "Image Saver"-style nodes third-party packs ship), so the
- * result-output picker only offers nodes worth pointing at instead of every node
- * in the graph. Only nodes with at least one mappable (non-link) input show up here,
- * since that's all parseWorkflowGraph captures — a save node wired with only link
- * inputs and no literal ones (rare; stock SaveImage always has filename_prefix)
- * won't appear.
+ * Plausible "result output" nodes among the given parsed inputs — anything whose class
+ * type or title suggests it saves/previews an image (SaveImage, PreviewImage, and the
+ * various custom "Image Saver"-style nodes third-party packs ship), so a result-output
+ * picker only offers nodes worth pointing at instead of every node in the graph. Only
+ * nodes with at least one mappable (non-link) input show up here, since that's all
+ * parseWorkflowGraph captures — a save node wired with only link inputs and no literal
+ * ones (rare; stock SaveImage always has filename_prefix) won't appear.
+ *
+ * Takes a plain array of `{nodeId, nodeTitle, classType}` rather than a `WorkflowVersion`
+ * so both the character-integration pipeline (`WorkflowVersion.nodes`, a `NodeMapping[]`
+ * that's a structural superset of this shape) and manual sessions
+ * (`parseWorkflowGraph`'s `ParsedNodeInput[]`, which has no mapping/status concept at
+ * all) can share this same heuristic.
  */
-export function candidateOutputNodes(version: WorkflowVersion): OutputNodeCandidate[] {
+export function candidateOutputNodes(
+  nodes: Array<{ nodeId: string; nodeTitle: string; classType: string }>
+): OutputNodeCandidate[] {
   const seen = new Map<string, OutputNodeCandidate>();
 
-  for (const node of version.nodes) {
+  for (const node of nodes) {
     if (seen.has(node.nodeId)) continue;
     const haystack = `${node.classType} ${node.nodeTitle}`.toLowerCase();
     if (OUTPUT_NODE_KEYWORDS.some((keyword) => haystack.includes(keyword))) {

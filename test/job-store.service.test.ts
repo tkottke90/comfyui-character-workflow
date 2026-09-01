@@ -98,6 +98,40 @@ describe('job-store.service', () => {
     }
   });
 
+  it('onAnyChange fires on any key change under an owner, not under a different owner, and does not interfere with onChange', async () => {
+    const store = createJobStore(dir);
+    try {
+      const anyChanges: Array<{ key: string; record: JobRecord }> = [];
+      const exactChanges: JobRecord[] = [];
+
+      const unsubscribeAny = store.onAnyChange('rin-takahashi', (phaseBindingKey, record) => {
+        anyChanges.push({ key: phaseBindingKey, record });
+      });
+      const unsubscribeExact = store.onChange('rin-takahashi', 'refinement_cleanup', (record) => {
+        exactChanges.push(record);
+      });
+
+      await store.set('rin-takahashi', 'refinement_cleanup', SAMPLE);
+      await store.set('rin-takahashi', 'casting_batch', { ...SAMPLE, promptId: 'prompt-2' });
+      await store.set('ailsa-macleod', 'refinement_cleanup', { ...SAMPLE, promptId: 'prompt-3' }); // different owner — no callback
+
+      expect(anyChanges).to.have.length(2);
+      expect(anyChanges[0]).to.deep.equal({ key: 'refinement_cleanup', record: SAMPLE });
+      expect(anyChanges[1].key).to.equal('casting_batch');
+      expect(exactChanges).to.have.length(1); // unaffected by the onAnyChange subscription
+      expect(exactChanges[0]).to.deep.equal(SAMPLE);
+
+      unsubscribeAny();
+      await store.set('rin-takahashi', 'refinement_cleanup', { ...SAMPLE, status: 'done' });
+      expect(anyChanges).to.have.length(2); // unsubscribed — no further callbacks
+      expect(exactChanges).to.have.length(2); // onChange subscriber still active
+
+      unsubscribeExact();
+    } finally {
+      await store.close();
+    }
+  });
+
   it('deletes a job', async () => {
     const store = createJobStore(dir);
     try {

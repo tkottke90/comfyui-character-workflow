@@ -15,11 +15,51 @@
     </div>
 
     <div class="md:basis-3/5 flex flex-col gap-4">
-      <div class="flex justify-end">
-        <span title="Workflow field mapping isn't available yet — coming in a follow-up update.">
-          {{ ui.button('Generate', 'primary', 'button', true) }}
-        </span>
-      </div>
+      {% call ui.card('Actions') %}
+        <form method="post" action="/api/v1/manual/{{ session.id }}/generate?view=yes" class="flex items-center gap-2">
+          <input type="number" name="seed" id="single-seed-value" placeholder="Seed" required
+            class="w-28 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" />
+          <span data-randomize-seed="single-seed-value">
+            {{ ui.button('Randomize', 'secondary', 'button') }}
+          </span>
+          {% if not (session.workflowFile and session.resultOutput) %}
+            <span title="Attach a workflow and set a Result Output on the Configuration tab first.">
+              {{ ui.button('Generate', 'primary', 'submit', true) }}
+            </span>
+          {% else %}
+            {{ ui.button('Generate', 'primary', 'submit', false) }}
+          {% endif %}
+        </form>
+        <form method="post" action="/api/v1/manual/{{ session.id }}/generate-batch?view=yes" class="flex items-center gap-2 mt-3">
+          <input type="number" name="start" id="batch-start-value" placeholder="Starting Seed" required
+            class="w-28 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" />
+          <span data-randomize-seed="batch-start-value">
+            {{ ui.button('Randomize', 'secondary', 'button') }}
+          </span>
+          <input type="number" name="count" value="4" min="1" max="16"
+            class="w-20 rounded-md border border-steel-300 dark:border-steel-700 dark:bg-steel-800 px-2.5 py-1.5 text-[13px]" />
+          {{ ui.button('Run Batch', 'secondary', 'submit', not (session.workflowFile and session.resultOutput)) }}
+        </form>
+      {% endcall %}
+
+      {% if liveGenerations.length > 0 %}
+        {% call ui.card('Generating…') %}
+          <div data-sse-events="/manual/{{ session.id }}/events" data-sse-tiles data-images-base="/manual/{{ session.id }}/assets">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {% for generation in liveGenerations %}
+                {# Batch tiles are keyed by seed (matching sse-client.js's subJobs[].seed);
+                   a lone single-generation tile is keyed by its own id (matching the
+                   single job record's generationId) — the two are different matching
+                   schemes in jobToTiles(), not interchangeable. #}
+                <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden">
+                  {{ ui.jobTile(generation.seed if generation.batchId else generation.id, generation.image.filename if generation.image else none, '/manual/' + session.id + '/assets', 'manual-generations') }}
+                  <div class="p-2 text-[11.5px]">{{ ui.mono(generation.seed) }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endcall %}
+      {% endif %}
 
       {% call ui.card('Outputs') %}
         {% if doneGenerations.length == 0 %}

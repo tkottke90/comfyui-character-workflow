@@ -270,7 +270,7 @@ export function createIntegrationRouter(
     }
 
     const uniqueNodeIds = version ? Array.from(new Set(version.nodes.map((n) => n.nodeId))) : [];
-    const outputNodeCandidates = version ? candidateOutputNodes(version) : [];
+    const outputNodeCandidates = version ? candidateOutputNodes(version.nodes) : [];
 
     res.render('integration/workflow-mapping-detail.njk', {
       section: 'integration',

@@ -159,7 +159,14 @@
 {% macro _dynamicFieldRow(field, imageValuePartial) %}
   <div class="mb-3" data-field-row data-field-id="{{ field.id }}" data-field-key="{{ field.key }}" data-field-type="{{ field.type }}">
     <div class="flex items-center justify-between mb-1">
-      <label class="text-[13px] font-semibold text-steel-600 dark:text-steel-300">{{ field.key }}</label>
+      <div class="flex items-center gap-2">
+        <label class="text-[13px] font-semibold text-steel-600 dark:text-steel-300">{{ field.key }}</label>
+        {% if field.mappings %}
+          <span class="text-[10.5px] font-semibold uppercase tracking-wide {{ 'text-apple-700 dark:text-apple-300' if field.mappings.length else 'text-steel-400' }}" data-field-mapped-badge>
+            {{ 'Mapped' if field.mappings.length else 'Not mapped' }}
+          </span>
+        {% endif %}
+      </div>
       <div class="relative" data-field-menu>
         <button type="button" class="text-steel-400 hover:text-steel-600 text-[13px] px-1" data-field-menu-trigger>⋯</button>
         <div class="hidden absolute right-0 mt-1 bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-md shadow-sm text-[12.5px] z-10" data-field-menu-panel>
@@ -183,5 +190,25 @@
         <textarea rows="4" class="w-full rounded-md border border-steel-300 dark:border-steel-700 bg-transparent px-2.5 py-1.5 text-[13px] resize-y" data-field-value>{{ field.value }}</textarea>
       {% endif %}
     </div>
+  </div>
+{% endmacro %}
+
+{#
+  A live-progress placeholder tile — image-or-placeholder plus a status
+  overlay that public/sse-client.js patches in place via `data-tile-key`
+  (queued → running N/M → final image). Renders only the universal part;
+  callers wrap it with whatever domain-specific footer (seed label, winner
+  pill, select/delete actions, etc.) their page needs.
+#}
+{% macro jobTile(key, imagePath, imagesBase, viewerGroup) %}
+  <div class="aspect-[3/4] relative overflow-hidden" data-live-tile data-tile-key="{{ key }}" data-viewer-group="{{ viewerGroup }}">
+    {% if imagePath %}
+      <img src="{{ imagesBase }}/{{ imagePath }}" data-tile-image
+        data-viewer-trigger data-viewer-group="{{ viewerGroup }}"
+        class="absolute inset-0 w-full h-full object-cover" alt="" />
+    {% else %}
+      <div class="placeholder-photo absolute inset-0" data-tile-placeholder></div>
+    {% endif %}
+    <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[11px] px-2 py-1" data-tile-status></div>
   </div>
 {% endmacro %}

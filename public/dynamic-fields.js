@@ -108,9 +108,18 @@
       escapeHtml(field.type) +
       '">' +
       '<div class="flex items-center justify-between mb-1">' +
+      '<div class="flex items-center gap-2">' +
       '<label class="text-[13px] font-semibold text-steel-600 dark:text-steel-300">' +
       escapeHtml(field.key) +
       '</label>' +
+      (field.mappings
+        ? '<span class="text-[10.5px] font-semibold uppercase tracking-wide ' +
+          (field.mappings.length ? 'text-apple-700 dark:text-apple-300' : 'text-steel-400') +
+          '" data-field-mapped-badge>' +
+          (field.mappings.length ? 'Mapped' : 'Not mapped') +
+          '</span>'
+        : '') +
+      '</div>' +
       '<div class="relative" data-field-menu>' +
       '<button type="button" class="text-steel-400 hover:text-steel-600 text-[13px] px-1" data-field-menu-trigger>⋯</button>' +
       '<div class="hidden absolute right-0 mt-1 bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-md shadow-sm text-[12.5px] z-10" data-field-menu-panel>' +

@@ -10,50 +10,69 @@
   //     <progress data-sse-progress></progress>
   //   </div>
   //
-  // Single-result phases (job.kind === 'single'): on 'done' or 'error', the page just
-  // reloads — this app has no client-side framework and every other page already works
-  // by plain form-post/redirect, so reload is what shows the promoted result or the
-  // failure state, consistent with that.
+  // Single-result phases without live tiles (job.kind === 'single', no data-sse-tiles):
+  // on 'done' or 'error', the page just reloads — this app has no client-side framework
+  // and every other page already works by plain form-post/redirect, so reload is what
+  // shows the promoted result or the failure state, consistent with that.
   //
-  // Casting batch (job.kind === 'batch') is the deliberate exception in the design: a
-  // tile grid patched in place rather than reloaded, since a reload mid-batch would lose
-  // the in-progress state of every candidate that hadn't finished yet. Opt in per-page by
-  // also setting data-sse-batch on the same element, plus a data-images-base prefix (e.g.
-  // "/characters/<slug>/images/file") images are served under. Each candidate tile is:
-  //   <div data-casting-tile data-seed="<seed>">
+  // A page can opt into live tiles instead — patched in place rather than reloaded, since
+  // a reload mid-run would lose the in-progress state of every tile that hadn't finished
+  // yet — by setting data-sse-tiles on the data-sse-events element, plus a
+  // data-images-base prefix (e.g. "/characters/<slug>/images/file") images are served
+  // under. Each tile is:
+  //   <div data-live-tile data-tile-key="<key>">
   //     <img data-tile-image> or <div data-tile-placeholder> (whichever the page rendered)
   //     <div data-tile-status></div>
-  //     <span data-tile-delete> (server-rendered hidden until the candidate has an image;
-  //       unhidden client-side on 'done')
+  //     <span data-tile-delete> (server-rendered hidden until the tile has an image;
+  //       unhidden client-side on 'done' — used by Casting Batch, not by manual generations)
   //   </div>
+  //
+  // Two shapes of tiles-enabled stream exist:
+  // - One job per message (Casting Batch): `job.kind === 'batch'`, mapped to one tile per
+  //   sub-job by jobToTiles() below.
+  // - A multiplexed array, `{ jobs: [...] }` (manual sessions — any number of single
+  //   generations and/or batches can be in flight for one session at once, each in its
+  //   own job-store slot): every job in the array is mapped to its own tile(s) the same
+  //   way. This stream never triggers a reload — new jobs can appear at any time.
 
-  function patchBatchTiles(root, job) {
+  // Maps whatever JobRecord arrives to one shape both callers below share: one tile per
+  // batch sub-job (keyed by its seed), or a single one-item array for a plain job (keyed
+  // by the generationId the submitting service recorded on it).
+  function jobToTiles(job) {
+    if (job.kind === 'batch') {
+      return (job.subJobs || []).map(function (s) {
+        return { key: s.seed, status: s.status, progress: s.progress, resultPath: s.resultPath, error: s.error };
+      });
+    }
+    return [{ key: job.generationId, status: job.status, progress: job.progress, resultPath: job.resultPath, error: job.error }];
+  }
+
+  function patchTiles(root, items) {
     var imagesBase = root.getAttribute('data-images-base') || '';
-    var subJobs = job.subJobs || [];
     var done = 0;
     var failed = 0;
 
-    subJobs.forEach(function (sub) {
-      if (sub.status === 'done') done += 1;
-      if (sub.status === 'error') failed += 1;
+    items.forEach(function (item) {
+      if (item.status === 'done') done += 1;
+      if (item.status === 'error') failed += 1;
 
-      var tile = root.querySelector('[data-casting-tile][data-seed="' + sub.seed + '"]');
+      var tile = root.querySelector('[data-live-tile][data-tile-key="' + item.key + '"]');
       if (!tile) return;
 
       var statusEl = tile.querySelector('[data-tile-status]');
       if (statusEl) {
-        if (sub.status === 'done') statusEl.textContent = '';
-        else if (sub.status === 'error')
+        if (item.status === 'done') statusEl.textContent = '';
+        else if (item.status === 'error')
           statusEl.textContent =
-            'Failed' + (sub.error && sub.error.message ? ': ' + sub.error.message : '');
-        else if (sub.status === 'running')
+            'Failed' + (item.error && item.error.message ? ': ' + item.error.message : '');
+        else if (item.status === 'running')
           statusEl.textContent =
-            'Running' + (sub.progress ? ' ' + sub.progress.value + '/' + sub.progress.max : '…');
+            'Running' + (item.progress ? ' ' + item.progress.value + '/' + item.progress.max : '…');
         else statusEl.textContent = 'Queued…';
       }
 
-      if (sub.status === 'done' && sub.resultPath) {
-        var src = imagesBase + '/' + sub.resultPath;
+      if (item.status === 'done' && item.resultPath) {
+        var src = imagesBase + '/' + item.resultPath;
         var img = tile.querySelector('[data-tile-image]');
         var placeholder = tile.querySelector('[data-tile-placeholder]');
         if (img) {
@@ -62,7 +81,7 @@
           var newImg = document.createElement('img');
           newImg.setAttribute('data-tile-image', '');
           newImg.setAttribute('data-viewer-trigger', '');
-          newImg.setAttribute('data-viewer-group', 'casting-batch');
+          newImg.setAttribute('data-viewer-group', tile.getAttribute('data-viewer-group') || '');
           newImg.setAttribute('src', src);
           newImg.setAttribute('alt', '');
           newImg.className = placeholder.className;
@@ -70,20 +89,20 @@
         }
       }
 
-      if (sub.status === 'done') {
+      if (item.status === 'done') {
         var deleteEl = tile.querySelector('[data-tile-delete]');
         if (deleteEl) deleteEl.classList.remove('hidden');
       }
     });
 
-    return { total: subJobs.length, done: done, failed: failed };
+    return { total: items.length, done: done, failed: failed };
   }
 
   document.querySelectorAll('[data-sse-events]').forEach(function (root) {
     var url = root.getAttribute('data-sse-events');
     if (!url) return;
 
-    var isBatch = root.hasAttribute('data-sse-batch');
+    var wantsTiles = root.hasAttribute('data-sse-tiles');
     var statusEl = root.querySelector('[data-sse-status]');
     var progressEl = root.querySelector('[data-sse-progress]');
 
@@ -117,12 +136,22 @@
         return;
       }
 
+      // A multiplexed session-level stream (manual sessions): any number of jobs can be
+      // in flight at once, each patched into its own tile(s) — never reloaded, since new
+      // jobs can appear at any time the page is open.
+      if (wantsTiles && job.jobs && Array.isArray(job.jobs)) {
+        job.jobs.forEach(function (oneJob) {
+          patchTiles(root, jobToTiles(oneJob));
+        });
+        return;
+      }
+
       if (job.kind === 'batch') {
-        if (!isBatch) {
+        if (!wantsTiles) {
           setStatus('Casting batch in progress — refresh to see results.');
           return;
         }
-        var summary = patchBatchTiles(root, job);
+        var summary = patchTiles(root, jobToTiles(job));
         if (summary.total === 0) setStatus('');
         else if (summary.done + summary.failed >= summary.total) {
           source.close();

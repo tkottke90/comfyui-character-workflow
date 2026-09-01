@@ -44,24 +44,16 @@
       No candidates queued yet.
     </div>
   {% else %}
-    <!-- data-sse-batch (as opposed to data-sse-events alone) tells sse-client.js to patch
-         individual [data-casting-tile] elements by seed rather than reload the page — this
+    <!-- data-sse-tiles (as opposed to data-sse-events alone) tells sse-client.js to patch
+         individual [data-live-tile] elements by key rather than reload the page — this
          is the one page the design calls out as needing real per-tile live progress. -->
-    <div data-sse-events="/characters/{{ character.slug }}/events/casting_batch" data-sse-batch
+    <div data-sse-events="/characters/{{ character.slug }}/events/casting_batch" data-sse-tiles
       data-images-base="/characters/{{ character.slug }}/images/file">
       <div class="text-[12.5px] text-steel-500 mb-3" data-sse-status></div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {% for candidate in character.castingCandidates %}
-          <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-casting-tile data-seed="{{ candidate.seed }}">
-            <div class="aspect-[3/4] relative overflow-hidden">
-              {% if candidate.imagePath %}
-                <img src="/characters/{{ character.slug }}/images/file/{{ candidate.imagePath }}" data-tile-image
-                  data-viewer-trigger data-viewer-group="casting-batch" class="absolute inset-0 w-full h-full object-cover" alt="" />
-              {% else %}
-                <div class="placeholder-photo absolute inset-0" data-tile-placeholder></div>
-              {% endif %}
-              <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[11px] px-2 py-1" data-tile-status></div>
-            </div>
+          <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden">
+            {{ ui.jobTile(candidate.seed, candidate.imagePath, '/characters/' + character.slug + '/images/file', 'casting-batch') }}
             <div class="p-2.5">
               {{ ui.mono('seed ' + candidate.seed) }}
               {% if character.winnerCandidateSeed == candidate.seed %}

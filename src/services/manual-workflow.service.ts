@@ -25,11 +25,19 @@ const SessionNoteSchema = z.object({
   updatedAt: DefaultDateSchema
 })
 
+export const ManualFieldMappingSchema = z.object({
+  nodeId: z.string(),
+  inputName: z.string(),
+  classType: z.string()
+});
+export type ManualFieldMapping = z.infer<typeof ManualFieldMappingSchema>;
+
 export const ManualFieldSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   key: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Key must be alphanumeric/underscore only'),
   type: z.enum(['text', 'number', 'boolean', 'image', 'multiline']),
   value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  mappings: z.array(ManualFieldMappingSchema).default([]),
   createdAt: DefaultDateSchema,
   updatedAt: DefaultDateSchema
 });
@@ -38,8 +46,13 @@ export const ManualGenerationSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   status: z.enum(['queued', 'running', 'done', 'error']),
   fieldValuesSnapshot: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  // Defaulted, not strictly required — every new write always sets it explicitly, but a
+  // generation persisted before this field existed has no value to recover, and it must
+  // still parse rather than 500 the whole session on load.
+  seed: z.number().default(0),
   imageId: z.string().optional(),
   error: z.string().optional(),
+  batchId: z.string().optional(),
   createdAt: DefaultDateSchema,
   completedAt: z.coerce.date().optional()
 });
@@ -51,6 +64,8 @@ const ManualWorkflowSessionSchema = z.object({
   workflowDir: z.string(),
   workflowFile: z.string().optional(),
   workflowSource: z.enum(['upload', 'select']).optional(),
+  resultOutput: z.object({ nodeId: z.string(), outputIndex: z.number() }).nullable().default(null),
+  seedMappings: z.array(ManualFieldMappingSchema).default([]),
 
   images: z.array(ImageSchema).default([]),
   sessionNotes: z.array(SessionNoteSchema).default([]),
@@ -66,9 +81,12 @@ export const UploadSessionSchema = ManualWorkflowSessionSchema.pick({
   description: true,
   workflowFile: true,
   workflowSource: true,
+  resultOutput: true,
+  seedMappings: true,
   images: true,
   sessionNotes: true,
-  fields: true
+  fields: true,
+  generations: true
 })
 
 const ManualWorkflowSchema = RegistryBaseSchema.extend({
@@ -87,6 +105,12 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
 
   sessions: Map<string, string>;
   logger?: Logger
+
+  // Serializes updateSession() calls per session id — concurrent completions/submissions
+  // for the same session doing read-modify-write against the same on-disk file otherwise
+  // risk one write silently losing another's change. Different sessions stay fully
+  // concurrent; only calls for the same id ever queue behind one another.
+  private updateLocks = new Map<string, Promise<unknown>>();
 
   constructor (
       schema: ManualWorkflowConfig,
@@ -157,12 +181,34 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
     return sessionDetails
   }
 
-  async updateSession(id: string, session: Partial<ManualWorkflowUpdateSession>) {
+  /**
+   * `session` may be a plain patch, or an updater `(current) => patch` — the latter is
+   * required whenever the patch is derived from the session's own current state (e.g.
+   * appending to `generations`/`images`), since with a plain patch two overlapping calls
+   * would both compute their patch from the same stale snapshot and the loser's write
+   * would silently drop the winner's addition even though the lock serializes the writes
+   * themselves. The updater form runs with the freshly-loaded session, inside the lock.
+   */
+  async updateSession(
+    id: string,
+    session: Partial<ManualWorkflowUpdateSession> | ((current: ManualWorkflowSession) => Partial<ManualWorkflowUpdateSession>)
+  ) {
+    const previous = this.updateLocks.get(id) ?? Promise.resolve();
+    const next = previous.catch(() => {}).then(() => this.updateSessionLocked(id, session));
+    this.updateLocks.set(id, next.catch(() => {}));
+    return next;
+  }
+
+  private async updateSessionLocked(
+    id: string,
+    session: Partial<ManualWorkflowUpdateSession> | ((current: ManualWorkflowSession) => Partial<ManualWorkflowUpdateSession>)
+  ) {
     const sessionPath = this.checkForSession(id);
     const sessionDetails = await this.loadSession(sessionPath);
+    const patch = typeof session === 'function' ? session(sessionDetails) : session;
 
     // Validates the updates are legal
-    const updatedDetails = ManualWorkflowSessionSchema.parse({ ...sessionDetails, ...session });
+    const updatedDetails = ManualWorkflowSessionSchema.parse({ ...sessionDetails, ...patch });
 
     // Writes the updates back to the file
     await writeJsonFile(sessionPath, updatedDetails)
@@ -244,6 +290,8 @@ class ManualSession extends JsonRegistry<ManualWorkflowSession> {
   workflowDir: string;
   workflowFile?: string;
   workflowSource?: ManualWorkflowSession['workflowSource'];
+  resultOutput: ManualWorkflowSession['resultOutput'];
+  seedMappings: ManualWorkflowSession['seedMappings'];
 
   images: ManualWorkflowSession['images'];
   sessionNotes: ManualWorkflowSession['sessionNotes'];
@@ -263,6 +311,8 @@ class ManualSession extends JsonRegistry<ManualWorkflowSession> {
     this.workflowDir = schema.workflowDir;
     this.workflowFile = schema.workflowFile
     this.workflowSource = schema.workflowSource;
+    this.resultOutput = schema.resultOutput;
+    this.seedMappings = schema.seedMappings;
     this.images = schema.images;
     this.sessionNotes = schema.sessionNotes;
     this.fields = schema.fields;

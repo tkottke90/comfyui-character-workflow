@@ -1,14 +1,22 @@
 import { Router, Request, Response } from 'express';
 import path from 'node:path';
-import crypto from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { imageSize } from 'image-size';
-import { ManualWorkflowRegistry, ManualFieldSchema, ImageSchema } from '@/services/manual-workflow.service';
+import { z } from 'zod';
+import {
+  ManualWorkflowRegistry,
+  ManualFieldSchema,
+  ManualFieldMappingSchema
+} from '@/services/manual-workflow.service';
+import type { ManualFieldMapping, ManualWorkflowSession } from '@/services/manual-workflow.service';
 import { Application } from '@/types/application';
 import { BadRequestError, NotFoundError } from '@/errors/http.errors';
 import { readJsonFile, writeJsonFile } from '@/lib/files';
 import { parseJsonDataUrl, parseDataUrl } from '@/lib/data-url';
+import { parseWorkflowGraph } from '@/lib/comfyui-workflow';
+import { candidateOutputNodes } from '@/lib/workflow-mapping-logic';
+import { storeManualImage } from '@/lib/manual-image-store';
 import { createWorkflowMappingService } from '@/services/workflow-mapping.service';
+import { createManualExecutionService } from '@/services/manual-execution.service';
+import { ComfyUiConfigSchema } from '@/schemas/config.schema';
 
 function defaultValueForType(type: string) {
   switch (type) {
@@ -20,6 +28,31 @@ function defaultValueForType(type: string) {
   }
 }
 
+/**
+ * Finds the first other mapping owner (a field, or the session's Seed) whose mappings
+ * already claim one of `candidateMappings`' (nodeId, inputName) pairs. `ownerKey` is the
+ * id of the field being edited, or the literal 'seed' when editing Seed's own mappings —
+ * used to exclude the thing being edited from the conflict check against itself.
+ */
+function findMappingConflict(
+  session: ManualWorkflowSession,
+  ownerKey: string,
+  candidateMappings: ManualFieldMapping[]
+): { key: string } | undefined {
+  const claimed = new Set(candidateMappings.map((m) => `${m.nodeId}:${m.inputName}`));
+
+  if (ownerKey !== 'seed' && session.seedMappings.some((m) => claimed.has(`${m.nodeId}:${m.inputName}`))) {
+    return { key: 'Seed' };
+  }
+  for (const field of session.fields) {
+    if (field.id === ownerKey) continue;
+    if (field.mappings.some((m) => claimed.has(`${m.nodeId}:${m.inputName}`))) {
+      return { key: field.key };
+    }
+  }
+  return undefined;
+}
+
 
 export function createManualWorkflowAPI(app: Application) {
   const manualRouter = Router()
@@ -29,6 +62,21 @@ export function createManualWorkflowAPI(app: Application) {
   app.manualWorkflows = ManualWorkflowRegistry.fromPath(path.resolve(dir, 'registry.json'))
 
   const workflowMapping = createWorkflowMappingService(app.config.getConfigDir('workflows'));
+
+  const comfyConfig = app.config.loadConfig('comfy-ui', ComfyUiConfigSchema);
+  app.manualExecutionService = createManualExecutionService({
+    manualWorkflows: app.manualWorkflows,
+    comfyClient: app.comfyClient,
+    socket: app.comfySocket,
+    jobStore: app.manualJobStore,
+    clientId: comfyConfig.clientId
+  });
+  app.manualExecutionService.reconcile().catch((err) => {
+    app.logger.error(
+      'Startup manual-job reconciliation failed',
+      err instanceof Error ? err : undefined
+    );
+  });
 
   /**
    * Get Sessions
@@ -174,9 +222,33 @@ export function createManualWorkflowAPI(app: Application) {
       ? defaultValueForType(nextType)
       : (req.body.value !== undefined ? req.body.value : existing.value);
 
+    let mappings = existing.mappings;
+    if (req.body.mappings !== undefined) {
+      let nextMappings;
+      try {
+        nextMappings = z.array(ManualFieldMappingSchema).parse(req.body.mappings);
+      } catch (err) {
+        throw new BadRequestError(err instanceof Error ? err.message : 'Invalid mappings');
+      }
+
+      const conflict = findMappingConflict(session, existing.id, nextMappings);
+      if (conflict) {
+        throw new BadRequestError(`Input already mapped to "${conflict.key}"`);
+      }
+
+      mappings = nextMappings;
+    }
+
     let updated;
     try {
-      updated = ManualFieldSchema.parse({ ...existing, key: nextKey, type: nextType, value, updatedAt: new Date() });
+      updated = ManualFieldSchema.parse({
+        ...existing,
+        key: nextKey,
+        type: nextType,
+        value,
+        mappings,
+        updatedAt: new Date()
+      });
     } catch (err) {
       throw new BadRequestError(err instanceof Error ? err.message : 'Invalid field');
     }
@@ -233,25 +305,146 @@ export function createManualWorkflowAPI(app: Application) {
     const dataUrl = String(req.body.imageDataUrl ?? '');
     if (!dataUrl) throw new BadRequestError('An image file is required');
 
-    let buffer: Buffer, extension: string, width: number, height: number;
+    let image;
     try {
-      ({ buffer, extension } = parseDataUrl(dataUrl));
-      ({ width, height } = imageSize(buffer));
+      const { buffer, extension } = parseDataUrl(dataUrl);
+      image = await storeManualImage(
+        app.manualWorkflows,
+        session.id,
+        session.workflowDir,
+        buffer,
+        extension
+      );
     } catch (err) {
       throw new BadRequestError(err instanceof Error ? err.message : 'Invalid image file');
     }
 
-    const id = crypto.randomUUID();
-    const filename = `${id}.${extension}`;
-
-    const assetsDir = path.join(session.workflowDir, 'assets');
-    await mkdir(assetsDir, { recursive: true });
-    await writeFile(path.join(assetsDir, filename), buffer);
-
-    const image = ImageSchema.parse({ id, filename, size: { width, height } });
-    await app.manualWorkflows.updateSession(session.id, { images: [...session.images, image] });
-
     res.status(201).json(image);
+  });
+
+  /**
+   * Discover every mappable widget input in the session's attached workflow — fetched
+   * once by the Configuration page's field-mapping picker, not rendered as a standing
+   * list (see the field-mapping-execution design spec's departure from the
+   * character-integration convention).
+   */
+  manualRouter.get('/:id/workflow-inputs', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    if (!session.workflowFile) {
+      res.json({ inputs: [] });
+      return;
+    }
+
+    const rawGraph = await readJsonFile(path.join(session.workflowDir, session.workflowFile));
+    res.json({ inputs: parseWorkflowGraph(rawGraph) });
+  });
+
+  /**
+   * Set which node/output produces the final result image for a generation.
+   */
+  manualRouter.post('/:id/result-output', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    const nodeId = String(req.body.nodeId ?? '').trim();
+    if (!nodeId) throw new BadRequestError('A result node is required');
+    const outputIndex = Number(req.body.outputIndex ?? 0);
+
+    await app.manualWorkflows.updateSession(session.id, { resultOutput: { nodeId, outputIndex } });
+
+    if (req.query.view) {
+      res.redirect(`/manual/${session.id}/workspace/configuration`);
+    } else {
+      res.status(200).json({ nodeId, outputIndex });
+    }
+  });
+
+  /**
+   * Set which node inputs Seed is mapped to — a first-class, always-present pinned
+   * mapping (not tied to any user-created field), mirroring the fields PATCH's own
+   * mapping-save branch, including the same cross-mapping conflict check.
+   */
+  manualRouter.patch('/:id/seed-mapping', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+
+    let nextMappings;
+    try {
+      nextMappings = z.array(ManualFieldMappingSchema).parse(req.body.mappings ?? []);
+    } catch (err) {
+      throw new BadRequestError(err instanceof Error ? err.message : 'Invalid mappings');
+    }
+
+    const conflict = findMappingConflict(session, 'seed', nextMappings);
+    if (conflict) {
+      throw new BadRequestError(`Input already mapped to "${conflict.key}"`);
+    }
+
+    await app.manualWorkflows.updateSession(session.id, { seedMappings: nextMappings });
+
+    if (req.query.view) {
+      res.redirect(`/manual/${session.id}/workspace/configuration`);
+    } else {
+      res.status(200).json({ mappings: nextMappings });
+    }
+  });
+
+  /**
+   * Candidate result-output nodes (SaveImage/PreviewImage-style) plus every node id in
+   * the attached workflow — fetched once by the Result Output picker, the same
+   * lazy-fetch-once-cached pattern the field/Seed picker already uses for workflow-inputs.
+   */
+  manualRouter.get('/:id/output-nodes', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    if (!session.workflowFile) {
+      res.json({ candidates: [], allNodeIds: [] });
+      return;
+    }
+
+    const rawGraph = await readJsonFile(path.join(session.workflowDir, session.workflowFile));
+    const parsedInputs = parseWorkflowGraph(rawGraph);
+    res.json({
+      candidates: candidateOutputNodes(parsedInputs),
+      allNodeIds: Array.from(new Set(parsedInputs.map((input) => input.nodeId)))
+    });
+  });
+
+  /**
+   * Submit a single generation using the session's current field values and the given seed.
+   */
+  manualRouter.post('/:id/generate', async (req: Request, res: Response) => {
+    const seed = Number(req.body.seed);
+    if (!Number.isFinite(seed)) throw new BadRequestError('A seed is required');
+
+    const { generationId } = await app.manualExecutionService.submitGeneration(
+      req.params.id.toString(),
+      seed
+    );
+
+    if (req.query.view) {
+      res.redirect(`/manual/${req.params.id}/workspace/generation`);
+    } else {
+      res.status(202).json({ generationId });
+    }
+  });
+
+  /**
+   * Submit a batch of generations, auto-incrementing the seed by 1 per run, starting
+   * from `start` (clamped to 1-16 runs, same bound as Casting Batch).
+   */
+  manualRouter.post('/:id/generate-batch', async (req: Request, res: Response) => {
+    const start = Number(req.body.start);
+    const count = Math.min(Math.max(Number(req.body.count) || 1, 1), 16);
+    if (!Number.isFinite(start)) throw new BadRequestError('A start value is required');
+
+    const { batchId } = await app.manualExecutionService.submitBatch(
+      req.params.id.toString(),
+      start,
+      count
+    );
+
+    if (req.query.view) {
+      res.redirect(`/manual/${req.params.id}/workspace/generation`);
+    } else {
+      res.status(202).json({ batchId });
+    }
   });
 
   return manualRouter;

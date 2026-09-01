@@ -13,7 +13,7 @@
   //   an `<img>`, its own `src`/`currentSrc` is shown; otherwise (an overlay
   //   button placed over a tile whose own click target is already spoken for)
   //   the nearest `<img>` inside its enclosing tile
-  //   (`[data-casting-tile]`/`[data-gallery-tile]`/`[data-picker-tile]`/
+  //   (`[data-live-tile]`/`[data-gallery-tile]`/`[data-picker-tile]`/
   //   `[data-viewer-tile]`) is used instead. The URL is always read live off
   //   the `<img>` at click/step time — never cached — so SSE-patched tiles and
   //   client-side file-preview swaps can never go stale.
@@ -52,7 +52,7 @@
     }
     var scope =
       trigger.closest(
-        '[data-casting-tile], [data-gallery-tile], [data-picker-tile], [data-viewer-tile]',
+        '[data-live-tile], [data-gallery-tile], [data-picker-tile], [data-viewer-tile]',
       ) || trigger.parentElement;
     var img = scope && scope.querySelector('img');
     return img ? img.currentSrc || img.getAttribute('src') || '' : '';

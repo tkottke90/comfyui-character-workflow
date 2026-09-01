@@ -2,6 +2,10 @@ import express from 'express';
 import { Logger } from '@tkottke90/logger';
 import z from 'zod';
 import { ManualWorkflowRegistry } from '@/services/manual-workflow.service';
+import { ComfyUIClient } from '@/services/comfyui-client.service';
+import { ComfyUISocket } from '@/services/comfyui-socket.service';
+import { JobStore } from '@/services/job-store.service';
+import { ManualExecutionService } from '@/services/manual-execution.service';
 
 // Augment the Express namespace
 declare global {
@@ -85,7 +89,24 @@ declare global {
       };
       logger: Logger;
 
-      manualWorkflows: ManualWorkflowRegistry
+      manualWorkflows: ManualWorkflowRegistry;
+
+      /** One shared ComfyUI HTTP client + persistent websocket connection for the app's
+       *  whole lifetime — constructed once in `createComfyInfrastructure`
+       *  (`services/comfy-bootstrap.ts`), before both the v1 API controllers and the views
+       *  are wired up, so both layers can depend on the same instances. */
+      comfyClient: ComfyUIClient;
+      comfySocket: ComfyUISocket;
+
+      /** Character-pipeline job tracking, keyed by (characterSlug, phaseBindingKey). */
+      jobStore: JobStore;
+      /** Manual-session job tracking, keyed by (sessionId, 'run') — a separate store (not
+       *  just a separate keyspace in the same one) because both `ExecutionService.reconcile()`
+       *  and `ManualExecutionService.reconcile()` iterate `listAll()` unfiltered; sharing one
+       *  store would have each reconciler choke on the other's records. */
+      manualJobStore: JobStore;
+
+      manualExecutionService: ManualExecutionService;
     }
 
     interface Request {

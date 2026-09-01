@@ -8,9 +8,6 @@ import { createCharacterImagesService } from '../services/character-images.servi
 import { createTemplatesService } from '../services/templates.service';
 import { createStylesService } from '../services/styles.service';
 import { createWorkflowMappingService } from '../services/workflow-mapping.service';
-import { createComfyUIClient } from '../services/comfyui-client.service';
-import { createComfyUISocket } from '../services/comfyui-socket.service';
-import { createJobStore } from '../services/job-store.service';
 import { createExecutionService } from '../services/execution.service';
 import { createCharactersRouter } from './characters.views';
 import { createTemplatesRouter } from './templates.views';
@@ -37,25 +34,13 @@ export function createViews(app: Application) {
   const stylesService = createStylesService(app.config.getConfigDir('styles'));
   const workflowMappingService = createWorkflowMappingService(app.config.getConfigDir('workflows'));
 
-  // Execution engine wiring — one shared ComfyUI client + one persistent socket
-  // connection for the app's whole lifetime (not per-request, unlike the Integration
-  // pages' own short-lived clients used only for read-only status/object_info calls).
-  // The socket reconnects itself with capped backoff on an unexpected drop; reconnecting
-  // it when the comfy-ui config changes at runtime is still out of scope — this just gets
-  // a working connection up at boot.
+  // Execution engine wiring — reuses the one shared ComfyUI client, persistent socket
+  // connection, and job store `createComfyInfrastructure` already attached to `app`
+  // before both the v1 API controllers and these views were wired up (not per-request,
+  // unlike the Integration pages' own short-lived clients used only for read-only
+  // status/object_info calls).
+  const { comfyClient, comfySocket, jobStore } = app;
   const comfyConfig = app.config.loadConfig('comfy-ui', ComfyUiConfigSchema);
-  const comfyClient = createComfyUIClient({
-    baseUrl: comfyConfig.baseUrl,
-    apiKey: comfyConfig.apiKey || undefined,
-  });
-  const comfySocket = createComfyUISocket({
-    baseUrl: comfyConfig.baseUrl,
-    apiKey: comfyConfig.apiKey || undefined,
-    clientId: comfyConfig.clientId,
-  });
-  comfySocket.connect();
-
-  const jobStore = createJobStore(app.config.getConfigDir('jobs'));
   const phasePromptConfig = app.config.loadConfig('phase-prompt', PhasePromptConfigSchema);
   const executionService = createExecutionService({
     workflowMapping: workflowMappingService,
