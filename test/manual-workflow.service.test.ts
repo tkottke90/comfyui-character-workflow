@@ -8,6 +8,7 @@ import {
   ManualGenerationSchema,
   ImageSchema,
 } from '../src/services/manual-workflow.service';
+import { NotFoundError } from '../src/errors/http.errors';
 
 describe('manual-workflow.service schemas', () => {
   describe('ManualFieldSchema', () => {
@@ -230,6 +231,43 @@ describe('ManualWorkflowRegistry — fields persistence', () => {
       expect(result).to.deep.equal({ deleted: true });
       const reloaded = await registry.getSession(session.id);
       expect(reloaded.images).to.deep.equal([]);
+    });
+  });
+
+  describe('setImageNsfw', () => {
+    it('sets nsfw from false to true and persists the change', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, nsfw: false });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.setImageNsfw(session.id, image.id, true);
+
+      expect(result.nsfw).to.equal(true);
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images[0].nsfw).to.equal(true);
+    });
+
+    it('sets nsfw from true to false and persists the change', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, nsfw: true });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.setImageNsfw(session.id, image.id, false);
+
+      expect(result.nsfw).to.equal(false);
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images[0].nsfw).to.equal(false);
+    });
+
+    it('throws NotFoundError for an unknown imageId', async () => {
+      const session = await registry.addSession('Test Session');
+
+      try {
+        await registry.setImageNsfw(session.id, 'does-not-exist', true);
+        expect.fail('expected setImageNsfw to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(NotFoundError);
+      }
     });
   });
 });

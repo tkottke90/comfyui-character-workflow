@@ -15,19 +15,26 @@
     <div class="flex items-center justify-end mb-4">
       {{ ui.mono(images.length ~ ' images') }}
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" data-images-endpoint="/api/v1/manual/{{ session.id }}/images">
       {% for image in images %}
-        <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden">
-          <div class="aspect-[3/4] relative overflow-hidden">
+        <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-image-tile data-image-id="{{ image.id }}">
+          <div class="aspect-[3/4] relative overflow-hidden" data-nsfw-target {% if image.nsfw %}data-nsfw-enabled{% endif %}>
             <img src="/manual/{{ session.id }}/assets/{{ image.filename }}"
               data-viewer-trigger data-viewer-group="workspace-images" class="absolute inset-0 w-full h-full object-cover" alt="" />
+            <div data-nsfw-badge class="absolute bottom-1 right-1">{{ ui.pill('nsfw', 'danger') }}</div>
           </div>
           <div class="p-2.5">
             <div class="mb-1.5 text-[12px] text-steel-500">{{ ui.mono(image.createdAt.toISOString().slice(0, 16).replace('T', ' ')) }}</div>
-            <form method="post" action="/manual/{{ session.id }}/workspace/images/{{ image.id }}/delete"
-              onsubmit="return confirm('Delete this image? This cannot be undone.');">
-              <button type="submit" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
-            </form>
+            <div class="flex items-center justify-between">
+              <form method="post" action="/manual/{{ session.id }}/workspace/images/{{ image.id }}/delete"
+                onsubmit="return confirm('Delete this image? This cannot be undone.');">
+                <button type="submit" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
+              </form>
+              <button type="button" data-nsfw-toggle
+                class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">
+                {{ 'Unset NSFW' if image.nsfw else 'Set NSFW' }}
+              </button>
+            </div>
           </div>
         </div>
       {% endfor %}

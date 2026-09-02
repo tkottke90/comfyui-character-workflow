@@ -63,7 +63,7 @@
         {% else %}
           <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
             {% for image in recentImages %}
-              <div class="aspect-square rounded-md overflow-hidden relative">
+              <div class="aspect-square rounded-md overflow-hidden relative" {% if image.nsfw %}data-nsfw-enabled{% endif %}>
                 <img src="/manual/{{ workflow.id }}/assets/{{ image.filename }}" class="w-full h-full object-cover" alt="" />
                 {% if image.final %}
                   <div class="absolute top-1 right-1">{{ ui.pill('final', 'green') }}</div>

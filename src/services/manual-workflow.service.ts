@@ -237,6 +237,26 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
     return { deleted: true };
   }
 
+  /**
+   * Sets (or clears) the nsfw flag on a single image in a session's gallery.
+   * @param id ID of the session
+   * @param imageId ID of the image to update
+   * @param nsfw The new nsfw value
+   * @throws {NotFoundError} when the image is not found
+   */
+  async setImageNsfw(id: string, imageId: string, nsfw: boolean): Promise<ManualImage> {
+    const sessionPath = this.checkForSession(id);
+    const session = await this.loadSession(sessionPath);
+    const image = session.images.find((img) => img.id === imageId);
+
+    if (!image) throw new NotFoundError(`No image found for id - ${imageId}`);
+
+    const images = session.images.map((img) => (img.id === imageId ? { ...img, nsfw } : img));
+    await this.updateSession(id, { images });
+
+    return images.find((img) => img.id === imageId)!;
+  }
+
 
   toJSON() {
     const data = this.mapper.parse({

@@ -356,6 +356,57 @@ describe('manual field CRUD + image upload + asset serving', () => {
     });
   });
 
+  describe('PATCH /api/v1/manual/:id/images/:imageId', () => {
+    async function seedImage() {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageDataUrl: ONE_PIXEL_PNG_DATA_URL }),
+      });
+      const image = (await res.json()) as { id: string };
+      return image.id;
+    }
+
+    it('sets nsfw to true and persists it on the session', async () => {
+      const imageId = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/${imageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nsfw: true }),
+      });
+
+      expect(res.status).to.equal(200);
+      const image = (await res.json()) as { nsfw: boolean };
+      expect(image.nsfw).to.equal(true);
+
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.images[0].nsfw).to.equal(true);
+    });
+
+    it('rejects a non-boolean nsfw with 400', async () => {
+      const imageId = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/${imageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nsfw: 'yes' }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+
+    it('returns 404 for an unknown imageId', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/does-not-exist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nsfw: true }),
+      });
+
+      expect(res.status).to.equal(404);
+    });
+  });
+
   describe('GET /api/v1/manual/:id/workflow-inputs', () => {
     it('returns an empty list when no workflow is attached', async () => {
       const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/workflow-inputs`);

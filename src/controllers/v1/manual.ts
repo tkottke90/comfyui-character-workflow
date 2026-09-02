@@ -323,6 +323,19 @@ export function createManualWorkflowAPI(app: Application) {
   });
 
   /**
+   * Update an image's editable metadata (currently just nsfw)
+   */
+  manualRouter.patch('/:id/images/:imageId', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    if (typeof req.body.nsfw !== 'boolean') {
+      throw new BadRequestError('nsfw must be a boolean');
+    }
+
+    const image = await app.manualWorkflows.setImageNsfw(session.id, req.params.imageId.toString(), req.body.nsfw);
+    res.status(200).json(image);
+  });
+
+  /**
    * Discover every mappable widget input in the session's attached workflow — fetched
    * once by the Configuration page's field-mapping picker, not rendered as a standing
    * list (see the field-mapping-execution design spec's departure from the

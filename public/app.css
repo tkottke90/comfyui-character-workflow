@@ -41,6 +41,24 @@ dialog[data-image-viewer]::backdrop {
     opacity 250ms var(--toast-ease-out);
 }
 
+/* NSFW blur: driven entirely by adding/removing [data-nsfw-enabled] on an image's tile
+   wrapper (see public/nsfw-toggle.js) — no JS-side class toggling needed. */
+:root {
+  --nsfw-blur: 14px;
+}
+
+[data-nsfw-enabled] img {
+  filter: blur(var(--nsfw-blur));
+}
+
+[data-nsfw-badge] {
+  display: none;
+}
+
+[data-nsfw-enabled] [data-nsfw-badge] {
+  display: block;
+}
+
 .toast.toast-spring {
   transition:
     transform 250ms var(--toast-ease-spring),
