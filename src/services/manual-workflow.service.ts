@@ -3,7 +3,7 @@ import z from "zod";
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { NotFoundError } from "@/errors/http.errors";
+import { ConflictError, NotFoundError } from "@/errors/http.errors";
 import { readFileWithSchema, writeJsonFile } from "@/lib/files";
 import { Logger } from "@tkottke90/logger";
 import { DefaultDateSchema } from "@/lib/validation";
@@ -15,7 +15,8 @@ export const ImageSchema = z.object({
   parent: z.string().optional(),
   createdAt: z.coerce.date().default(() => new Date()),
   final: z.boolean().default(false),
-  nsfw: z.boolean().default(false)
+  nsfw: z.boolean().default(false),
+  locked: z.boolean().default(false)
 });
 
 const SessionNoteSchema = z.object({
@@ -221,6 +222,7 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
    * Idempotent: deleting an unknown imageId or an already-missing file is not an error.
    * @param id ID of the session
    * @param imageId ID of the image to delete
+   * @throws {ConflictError} when the image is locked
    */
   async deleteImage(id: string, imageId: string): Promise<{ deleted: boolean }> {
     const sessionPath = this.checkForSession(id);
@@ -228,6 +230,7 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
     const image = session.images.find((img) => img.id === imageId);
 
     if (!image) return { deleted: false };
+    if (image.locked) throw new ConflictError('Image is locked and cannot be deleted');
 
     await rm(path.join(session.workflowDir, 'assets', image.filename), { force: true });
 
@@ -252,6 +255,26 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
     if (!image) throw new NotFoundError(`No image found for id - ${imageId}`);
 
     const images = session.images.map((img) => (img.id === imageId ? { ...img, nsfw } : img));
+    await this.updateSession(id, { images });
+
+    return images.find((img) => img.id === imageId)!;
+  }
+
+  /**
+   * Sets (or clears) the locked flag on a single image in a session's gallery.
+   * @param id ID of the session
+   * @param imageId ID of the image to update
+   * @param locked The new locked value
+   * @throws {NotFoundError} when the image is not found
+   */
+  async setImageLocked(id: string, imageId: string, locked: boolean): Promise<ManualImage> {
+    const sessionPath = this.checkForSession(id);
+    const session = await this.loadSession(sessionPath);
+    const image = session.images.find((img) => img.id === imageId);
+
+    if (!image) throw new NotFoundError(`No image found for id - ${imageId}`);
+
+    const images = session.images.map((img) => (img.id === imageId ? { ...img, locked } : img));
     await this.updateSession(id, { images });
 
     return images.find((img) => img.id === imageId)!;

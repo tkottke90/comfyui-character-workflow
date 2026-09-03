@@ -8,7 +8,7 @@ import {
   ManualGenerationSchema,
   ImageSchema,
 } from '../src/services/manual-workflow.service';
-import { NotFoundError } from '../src/errors/http.errors';
+import { ConflictError, NotFoundError } from '../src/errors/http.errors';
 
 describe('manual-workflow.service schemas', () => {
   describe('ManualFieldSchema', () => {
@@ -232,6 +232,27 @@ describe('ManualWorkflowRegistry — fields persistence', () => {
       const reloaded = await registry.getSession(session.id);
       expect(reloaded.images).to.deep.equal([]);
     });
+
+    it('throws ConflictError for a locked image and leaves it untouched', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: true });
+      const assetPath = path.join(session.workflowDir, 'assets', image.filename);
+      fs.writeFileSync(assetPath, 'fake image bytes');
+      await registry.updateSession(session.id, { images: [image] });
+
+      try {
+        await registry.deleteImage(session.id, image.id);
+        expect.fail('expected deleteImage to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(ConflictError);
+      }
+
+      expect(fs.existsSync(assetPath)).to.equal(true);
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images.length).to.equal(1);
+      expect(reloaded.images[0].id).to.equal(image.id);
+      expect(reloaded.images[0].locked).to.equal(true);
+    });
   });
 
   describe('setImageNsfw', () => {
@@ -265,6 +286,43 @@ describe('ManualWorkflowRegistry — fields persistence', () => {
       try {
         await registry.setImageNsfw(session.id, 'does-not-exist', true);
         expect.fail('expected setImageNsfw to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(NotFoundError);
+      }
+    });
+  });
+
+  describe('setImageLocked', () => {
+    it('sets locked from false to true and persists the change', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: false });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.setImageLocked(session.id, image.id, true);
+
+      expect(result.locked).to.equal(true);
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images[0].locked).to.equal(true);
+    });
+
+    it('sets locked from true to false and persists the change', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: true });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.setImageLocked(session.id, image.id, false);
+
+      expect(result.locked).to.equal(false);
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images[0].locked).to.equal(false);
+    });
+
+    it('throws NotFoundError for an unknown imageId', async () => {
+      const session = await registry.addSession('Test Session');
+
+      try {
+        await registry.setImageLocked(session.id, 'does-not-exist', true);
+        expect.fail('expected setImageLocked to throw');
       } catch (err) {
         expect(err).to.be.instanceOf(NotFoundError);
       }

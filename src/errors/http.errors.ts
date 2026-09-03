@@ -36,3 +36,12 @@ export class InternalServerError extends HttpError {
     this.name = 'InternalServerError';
   }
 }
+
+export class ConflictError extends HttpError {
+  statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}

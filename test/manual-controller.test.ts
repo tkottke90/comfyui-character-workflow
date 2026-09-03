@@ -405,6 +405,95 @@ describe('manual field CRUD + image upload + asset serving', () => {
 
       expect(res.status).to.equal(404);
     });
+
+    it('sets locked to true and persists it on the session', async () => {
+      const imageId = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/${imageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locked: true }),
+      });
+
+      expect(res.status).to.equal(200);
+      const image = (await res.json()) as { locked: boolean };
+      expect(image.locked).to.equal(true);
+
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.images[0].locked).to.equal(true);
+    });
+
+    it('rejects a non-boolean locked with 400', async () => {
+      const imageId = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/${imageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locked: 'yes' }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe('POST /manual/:id/workspace/images/:imageId/delete', () => {
+    async function seedImage() {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageDataUrl: ONE_PIXEL_PNG_DATA_URL }),
+      });
+      const image = (await res.json()) as { id: string };
+      return image.id;
+    }
+
+    it('deletes an unlocked image and redirects without an error param', async () => {
+      const imageId = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/images/${imageId}/delete`, {
+        method: 'POST',
+        redirect: 'manual',
+      });
+
+      expect(res.status).to.equal(302);
+      expect(res.headers.get('location')).to.equal(`/manual/${sessionId}/workspace/images`);
+
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.images).to.have.length(0);
+    });
+
+    it('refuses to delete a locked image and redirects with a deleteError param', async () => {
+      const imageId = await seedImage();
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/${imageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locked: true }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/images/${imageId}/delete`, {
+        method: 'POST',
+        redirect: 'manual',
+      });
+
+      expect(res.status).to.equal(302);
+      const location = res.headers.get('location') ?? '';
+      expect(location).to.include(`/manual/${sessionId}/workspace/images`);
+      expect(location).to.include('deleteError=');
+
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.images).to.have.length(1);
+    });
+  });
+
+  describe('GET /manual/:id/workspace/images', () => {
+    it('renders the error banner when a deleteError query param is present', async () => {
+      const message = encodeURIComponent('Image is locked and cannot be deleted');
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/images?deleteError=${message}`);
+
+      expect(res.status).to.equal(200);
+      const body = await res.text();
+      expect(body).to.include('Image is locked and cannot be deleted');
+    });
   });
 
   describe('GET /api/v1/manual/:id/workflow-inputs', () => {

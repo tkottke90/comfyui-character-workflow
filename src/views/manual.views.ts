@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createWorkflowMappingService } from '../services/workflow-mapping.service';
 import { getWorkflowSlot } from '../comfy/workflow-registry';
 import { sanitizeSegment } from '@/lib/path-sanitize';
-import { NotFoundError } from '@/errors/http.errors';
+import { ConflictError, NotFoundError } from '@/errors/http.errors';
 import type { ManualGeneration, ManualImage, ManualWorkflowSession } from '@/services/manual-workflow.service';
 import { isJobActive } from '@/services/manual-execution.service';
 
@@ -157,12 +157,22 @@ export function createManualViewRouter(router: Router) {
 
     res.render('manual/workspace/images.njk', {
       session: sessionJson,
-      images
+      images,
+      error: typeof req.query.deleteError === 'string' ? req.query.deleteError : undefined
     });
   });
 
   router.post('/:id/workspace/images/:imageId/delete', async (req: Request, res: Response) => {
-    await req.app.manualWorkflows.deleteImage(req.params.id.toString(), req.params.imageId.toString());
+    try {
+      await req.app.manualWorkflows.deleteImage(req.params.id.toString(), req.params.imageId.toString());
+    } catch (err) {
+      if (err instanceof ConflictError) {
+        const message = encodeURIComponent(err.message);
+        return res.redirect(`/manual/${req.params.id}/workspace/images?deleteError=${message}`);
+      }
+      throw err;
+    }
+
     res.redirect(`/manual/${req.params.id}/workspace/images`);
   });
 

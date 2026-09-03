@@ -323,16 +323,22 @@ export function createManualWorkflowAPI(app: Application) {
   });
 
   /**
-   * Update an image's editable metadata (currently just nsfw)
+   * Update an image's editable metadata (nsfw or locked)
    */
   manualRouter.patch('/:id/images/:imageId', async (req: Request, res: Response) => {
     const session = await app.manualWorkflows.getSession(req.params.id.toString());
-    if (typeof req.body.nsfw !== 'boolean') {
-      throw new BadRequestError('nsfw must be a boolean');
+
+    if (typeof req.body.nsfw === 'boolean') {
+      const image = await app.manualWorkflows.setImageNsfw(session.id, req.params.imageId.toString(), req.body.nsfw);
+      return res.status(200).json(image);
     }
 
-    const image = await app.manualWorkflows.setImageNsfw(session.id, req.params.imageId.toString(), req.body.nsfw);
-    res.status(200).json(image);
+    if (typeof req.body.locked === 'boolean') {
+      const image = await app.manualWorkflows.setImageLocked(session.id, req.params.imageId.toString(), req.body.locked);
+      return res.status(200).json(image);
+    }
+
+    throw new BadRequestError('nsfw or locked must be a boolean');
   });
 
   /**

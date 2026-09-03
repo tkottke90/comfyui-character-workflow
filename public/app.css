@@ -59,6 +59,12 @@ dialog[data-image-viewer]::backdrop {
   display: block;
 }
 
+/* Lock: hides the Delete action's wrapper when [data-locked] is set on the tile
+   (see public/lock-toggle.js) — server-side deletion is still refused independently. */
+[data-locked] [data-delete-slot] {
+  display: none;
+}
+
 .toast.toast-spring {
   transition:
     transform 250ms var(--toast-ease-spring),
