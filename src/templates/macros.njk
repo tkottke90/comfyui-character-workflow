@@ -49,10 +49,11 @@
   </div>
 {% endmacro %}
 
-{% macro copyable(value='', inline=false) %}
+{% macro copyable(value='', inline=false, absolute=false) %}
   {% set content = caller() %}
   <button type="button"
     data-copy-target="{{ value if value else (content | striptags | trim) }}"
+    {% if absolute %}data-copy-absolute{% endif %}
     aria-label="Copy to clipboard"
     class="group relative text-left transition-colors {{ 'inline-flex items-center gap-1.5 align-middle bg-transparent hover:text-steel-600 dark:hover:text-steel-300' if inline else 'flex items-start gap-3 w-full bg-white dark:bg-steel-900 border border-steel-200 dark:border-steel-800 rounded-lg shadow-[0_1px_2px_rgba(29,38,52,.06)] p-3 hover:bg-steel-50 dark:hover:bg-steel-800/50' }}">
     <span class="{{ '' if inline else 'flex-1 min-w-0' }}">{{ content }}</span>

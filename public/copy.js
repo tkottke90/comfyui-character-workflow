@@ -14,6 +14,10 @@ document.addEventListener('click', function (event) {
   var text = elem.getAttribute('data-copy-target') || '';
   if (!text) return;
 
+  if (elem.hasAttribute('data-copy-absolute')) {
+    text = new URL(text, window.location.origin).href;
+  }
+
   navigator.clipboard.writeText(text).then(
     function () {
       if (window.toast) window.toast.show('Copied to clipboard', { type: 'success' });

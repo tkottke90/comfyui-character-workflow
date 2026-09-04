@@ -17,6 +17,7 @@
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" data-images-endpoint="/api/v1/manual/{{ session.id }}/images">
       {% for image in images %}
+        {% set imageUrl = '/manual/' + session.id + '/assets/' + image.filename %}
         <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-image-tile data-image-id="{{ image.id }}" {% if image.locked %}data-locked{% endif %}>
           <div class="aspect-[3/4] relative overflow-hidden" data-nsfw-target {% if image.nsfw %}data-nsfw-enabled{% endif %}>
             <img src="/manual/{{ session.id }}/assets/{{ image.filename }}"
@@ -33,6 +34,7 @@
                 </form>
               </div>
               <div class="flex items-center gap-3">
+                {% call ui.copyable(imageUrl, inline=true, absolute=true) %}Copy URL{% endcall %}
                 <button type="button" data-nsfw-toggle
                   class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">
                   {{ 'Unset NSFW' if image.nsfw else 'Set NSFW' }}
