@@ -328,4 +328,129 @@ describe('ManualWorkflowRegistry — fields persistence', () => {
       }
     });
   });
+
+  describe('bulkDeleteImages', () => {
+    it('deletes unlocked images and removes their files from disk', async () => {
+      const session = await registry.addSession('Test Session');
+      const image1 = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 } });
+      const image2 = ImageSchema.parse({ id: 'img-2', filename: 'img-2.png', size: { width: 1, height: 1 } });
+      const assetPath1 = path.join(session.workflowDir, 'assets', image1.filename);
+      const assetPath2 = path.join(session.workflowDir, 'assets', image2.filename);
+      fs.writeFileSync(assetPath1, 'fake image bytes');
+      fs.writeFileSync(assetPath2, 'fake image bytes');
+      await registry.updateSession(session.id, { images: [image1, image2] });
+
+      const result = await registry.bulkDeleteImages(session.id, [image1.id, image2.id]);
+
+      expect(result.deleted).to.have.members([image1.id, image2.id]);
+      expect(result.skippedLocked).to.deep.equal([]);
+      expect(fs.existsSync(assetPath1)).to.equal(false);
+      expect(fs.existsSync(assetPath2)).to.equal(false);
+
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images).to.deep.equal([]);
+    });
+
+    it('skips locked images, returning them in skippedLocked, and leaves their files on disk', async () => {
+      const session = await registry.addSession('Test Session');
+      const unlocked = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: false });
+      const locked = ImageSchema.parse({ id: 'img-2', filename: 'img-2.png', size: { width: 1, height: 1 }, locked: true });
+      const lockedAssetPath = path.join(session.workflowDir, 'assets', locked.filename);
+      fs.writeFileSync(lockedAssetPath, 'fake image bytes');
+      await registry.updateSession(session.id, { images: [unlocked, locked] });
+
+      const result = await registry.bulkDeleteImages(session.id, [unlocked.id, locked.id]);
+
+      expect(result.deleted).to.deep.equal([unlocked.id]);
+      expect(result.skippedLocked).to.deep.equal([locked.id]);
+      expect(fs.existsSync(lockedAssetPath)).to.equal(true);
+
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images.map((img) => img.id)).to.deep.equal([locked.id]);
+    });
+
+    it('silently drops unknown ids', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 } });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.bulkDeleteImages(session.id, [image.id, 'does-not-exist']);
+
+      expect(result.deleted).to.deep.equal([image.id]);
+      expect(result.skippedLocked).to.deep.equal([]);
+    });
+
+    it('returns deleted: [] and skippedLocked with every id when all selected images are locked', async () => {
+      const session = await registry.addSession('Test Session');
+      const image1 = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: true });
+      const image2 = ImageSchema.parse({ id: 'img-2', filename: 'img-2.png', size: { width: 1, height: 1 }, locked: true });
+      await registry.updateSession(session.id, { images: [image1, image2] });
+
+      const result = await registry.bulkDeleteImages(session.id, [image1.id, image2.id]);
+
+      expect(result.deleted).to.deep.equal([]);
+      expect(result.skippedLocked).to.have.members([image1.id, image2.id]);
+    });
+  });
+
+  describe('bulkEditImages', () => {
+    it('sets locked=true on matching ids and leaves non-matching images untouched', async () => {
+      const session = await registry.addSession('Test Session');
+      const image1 = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: false });
+      const image2 = ImageSchema.parse({ id: 'img-2', filename: 'img-2.png', size: { width: 1, height: 1 }, locked: false });
+      await registry.updateSession(session.id, { images: [image1, image2] });
+
+      const result = await registry.bulkEditImages(session.id, [image1.id], { locked: true });
+
+      expect(result).to.have.length(1);
+      expect(result[0].locked).to.equal(true);
+
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images.find((img) => img.id === image1.id)!.locked).to.equal(true);
+      expect(reloaded.images.find((img) => img.id === image2.id)!.locked).to.equal(false);
+    });
+
+    it('sets nsfw=true on matching ids and leaves non-matching images untouched', async () => {
+      const session = await registry.addSession('Test Session');
+      const image1 = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, nsfw: false });
+      const image2 = ImageSchema.parse({ id: 'img-2', filename: 'img-2.png', size: { width: 1, height: 1 }, nsfw: false });
+      await registry.updateSession(session.id, { images: [image1, image2] });
+
+      const result = await registry.bulkEditImages(session.id, [image1.id], { nsfw: true });
+
+      expect(result).to.have.length(1);
+      expect(result[0].nsfw).to.equal(true);
+
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images.find((img) => img.id === image1.id)!.nsfw).to.equal(true);
+      expect(reloaded.images.find((img) => img.id === image2.id)!.nsfw).to.equal(false);
+    });
+
+    it('applies both locked and nsfw in one call', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: false, nsfw: false });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.bulkEditImages(session.id, [image.id], { locked: true, nsfw: true });
+
+      expect(result[0].locked).to.equal(true);
+      expect(result[0].nsfw).to.equal(true);
+
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images[0].locked).to.equal(true);
+      expect(reloaded.images[0].nsfw).to.equal(true);
+    });
+
+    it('silently ignores unknown ids', async () => {
+      const session = await registry.addSession('Test Session');
+      const image = ImageSchema.parse({ id: 'img-1', filename: 'img-1.png', size: { width: 1, height: 1 }, locked: false });
+      await registry.updateSession(session.id, { images: [image] });
+
+      const result = await registry.bulkEditImages(session.id, ['does-not-exist'], { locked: true });
+
+      expect(result).to.deep.equal([]);
+      const reloaded = await registry.getSession(session.id);
+      expect(reloaded.images[0].locked).to.equal(false);
+    });
+  });
 });

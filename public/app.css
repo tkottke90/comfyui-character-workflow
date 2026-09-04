@@ -65,6 +65,20 @@ dialog[data-image-viewer]::backdrop {
   display: none;
 }
 
+/* Multiselect: checkboxes only show and per-tile actions only hide while
+   [data-select-mode] is set on the grid root (see public/bulk-select.js). */
+[data-select-checkbox] {
+  display: none;
+}
+
+[data-select-mode-root][data-select-mode] [data-select-checkbox] {
+  display: block;
+}
+
+[data-select-mode-root][data-select-mode] [data-tile-actions] {
+  display: none;
+}
+
 .toast.toast-spring {
   transition:
     transform 250ms var(--toast-ease-spring),

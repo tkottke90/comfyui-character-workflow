@@ -12,21 +12,27 @@
       No images yet.
     </div>
   {% else %}
-    <div class="flex items-center justify-end mb-4">
-      {{ ui.mono(images.length ~ ' images') }}
+    <div class="flex items-center justify-between mb-4">
+      <span data-image-count class="font-mono text-[13px] text-steel-500 dark:text-steel-400">{{ images.length ~ ' images' }}</span>
+      <div data-select-controls class="flex items-center gap-3">
+        <button type="button" data-select-toggle class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">Select</button>
+        <button type="button" data-select-all class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline hidden">Select all</button>
+        <button type="button" data-select-cancel class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline hidden">Cancel</button>
+      </div>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" data-images-endpoint="/api/v1/manual/{{ session.id }}/images">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" data-images-endpoint="/api/v1/manual/{{ session.id }}/images" data-select-mode-root>
       {% for image in images %}
         {% set imageUrl = '/manual/' + session.id + '/assets/' + image.filename %}
         <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-image-tile data-image-id="{{ image.id }}" {% if image.locked %}data-locked{% endif %}>
           <div class="aspect-[3/4] relative overflow-hidden" data-nsfw-target {% if image.nsfw %}data-nsfw-enabled{% endif %}>
+            <input type="checkbox" data-select-checkbox class="absolute top-1.5 left-1.5 z-10 h-4 w-4" aria-label="Select image" />
             <img src="/manual/{{ session.id }}/assets/{{ image.filename }}"
               data-viewer-trigger data-viewer-group="workspace-images" class="absolute inset-0 w-full h-full object-cover" alt="" />
             <div data-nsfw-badge class="absolute bottom-1 right-1">{{ ui.pill('nsfw', 'danger') }}</div>
           </div>
           <div class="p-2.5">
             <div class="mb-1.5 text-[12px] text-steel-500">{{ ui.mono(image.createdAt.toISOString().slice(0, 16).replace('T', ' ')) }}</div>
-            <div class="flex items-center justify-between">
+            <div data-tile-actions class="flex items-center justify-between">
               <div data-delete-slot>
                 <form method="post" action="/manual/{{ session.id }}/workspace/images/{{ image.id }}/delete"
                   onsubmit="return confirm('Delete this image? This cannot be undone.');">
@@ -48,6 +54,15 @@
           </div>
         </div>
       {% endfor %}
+    </div>
+    <div data-select-bar class="hidden fixed bottom-0 left-0 right-0 border-t border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 p-3 flex items-center justify-between">
+      <span data-select-count class="text-[13px] font-semibold"></span>
+      <div class="flex items-center gap-3">
+        <button type="button" data-bulk-action="lock" class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">Lock</button>
+        <button type="button" data-bulk-action="unlock" class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">Unlock</button>
+        <button type="button" data-bulk-action="nsfw" class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">Mark NSFW</button>
+        <button type="button" data-bulk-action="delete" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
+      </div>
     </div>
   {% endif %}
 {% endblock %}

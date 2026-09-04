@@ -436,6 +436,144 @@ describe('manual field CRUD + image upload + asset serving', () => {
     });
   });
 
+  describe('POST /api/v1/manual/:id/images/bulk-action/delete', () => {
+    async function seedImage() {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageDataUrl: ONE_PIXEL_PNG_DATA_URL }),
+      });
+      const image = (await res.json()) as { id: string };
+      return image.id;
+    }
+
+    it('returns 200 with { deleted, skippedLocked } for a mix of locked/unlocked ids', async () => {
+      const unlockedId = await seedImage();
+      const lockedId = await seedImage();
+
+      await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/${lockedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locked: true }),
+      });
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: [unlockedId, lockedId] }),
+      });
+
+      expect(res.status).to.equal(200);
+      const result = (await res.json()) as { deleted: string[]; skippedLocked: string[] };
+      expect(result.deleted).to.deep.equal([unlockedId]);
+      expect(result.skippedLocked).to.deep.equal([lockedId]);
+
+      const session = await app.manualWorkflows.getSession(sessionId);
+      expect(session.images.map((img) => img.id)).to.deep.equal([lockedId]);
+    });
+
+    it('rejects a non-array imageIds with 400', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: 'not-an-array' }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+
+    it('rejects an imageIds array containing a non-string element with 400', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: [123] }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe('PATCH /api/v1/manual/:id/images/bulk-action/edit', () => {
+    async function seedImage() {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageDataUrl: ONE_PIXEL_PNG_DATA_URL }),
+      });
+      const image = (await res.json()) as { id: string };
+      return image.id;
+    }
+
+    it('returns 200 with { images } when locked is set on multiple ids', async () => {
+      const id1 = await seedImage();
+      const id2 = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: [id1, id2], locked: true }),
+      });
+
+      expect(res.status).to.equal(200);
+      const result = (await res.json()) as { images: { id: string; locked: boolean }[] };
+      expect(result.images).to.have.length(2);
+      expect(result.images.every((img) => img.locked)).to.equal(true);
+    });
+
+    it('returns 200 with { images } when nsfw is set on multiple ids', async () => {
+      const id1 = await seedImage();
+      const id2 = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: [id1, id2], nsfw: true }),
+      });
+
+      expect(res.status).to.equal(200);
+      const result = (await res.json()) as { images: { id: string; nsfw: boolean }[] };
+      expect(result.images).to.have.length(2);
+      expect(result.images.every((img) => img.nsfw)).to.equal(true);
+    });
+
+    it('returns 200 with { images } when both locked and nsfw are set together', async () => {
+      const id1 = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: [id1], locked: true, nsfw: true }),
+      });
+
+      expect(res.status).to.equal(200);
+      const result = (await res.json()) as { images: { id: string; locked: boolean; nsfw: boolean }[] };
+      expect(result.images[0].locked).to.equal(true);
+      expect(result.images[0].nsfw).to.equal(true);
+    });
+
+    it('rejects a non-array imageIds with 400', async () => {
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: 'not-an-array', locked: true }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+
+    it('rejects a body with neither locked nor nsfw boolean with 400', async () => {
+      const id1 = await seedImage();
+
+      const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images/bulk-action/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds: [id1] }),
+      });
+
+      expect(res.status).to.equal(400);
+    });
+  });
+
   describe('POST /manual/:id/workspace/images/:imageId/delete', () => {
     async function seedImage() {
       const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images`, {

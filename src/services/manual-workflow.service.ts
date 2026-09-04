@@ -241,6 +241,31 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
   }
 
   /**
+   * Deletes multiple images from a session's gallery in one call. Locked
+   * images are skipped rather than aborting the whole request.
+   * @param id ID of the session
+   * @param imageIds IDs of the images to delete
+   */
+  async bulkDeleteImages(id: string, imageIds: string[]): Promise<{ deleted: string[]; skippedLocked: string[] }> {
+    const sessionPath = this.checkForSession(id);
+    const session = await this.loadSession(sessionPath);
+    const targets = session.images.filter((img) => imageIds.includes(img.id));
+
+    const skippedLocked = targets.filter((img) => img.locked).map((img) => img.id);
+    const toDelete = targets.filter((img) => !img.locked);
+
+    await Promise.all(toDelete.map((img) =>
+      rm(path.join(session.workflowDir, 'assets', img.filename), { force: true })
+    ));
+
+    const deletedIds = new Set(toDelete.map((img) => img.id));
+    const images = session.images.filter((img) => !deletedIds.has(img.id));
+    await this.updateSession(id, { images });
+
+    return { deleted: [...deletedIds], skippedLocked };
+  }
+
+  /**
    * Sets (or clears) the nsfw flag on a single image in a session's gallery.
    * @param id ID of the session
    * @param imageId ID of the image to update
@@ -280,6 +305,27 @@ export class ManualWorkflowRegistry extends JsonRegistry<z.infer<typeof ManualWo
     return images.find((img) => img.id === imageId)!;
   }
 
+  /**
+   * Applies a partial update (locked and/or nsfw) to multiple images in a
+   * session's gallery in one call. Unknown ids are silently ignored.
+   * @param id ID of the session
+   * @param imageIds IDs of the images to update
+   * @param updates The fields to apply to each matching image
+   */
+  async bulkEditImages(
+    id: string,
+    imageIds: string[],
+    updates: { locked?: boolean; nsfw?: boolean }
+  ): Promise<ManualImage[]> {
+    const sessionPath = this.checkForSession(id);
+    const session = await this.loadSession(sessionPath);
+    const images = session.images.map((img) =>
+      imageIds.includes(img.id) ? { ...img, ...updates } : img
+    );
+    await this.updateSession(id, { images });
+
+    return images.filter((img) => imageIds.includes(img.id));
+  }
 
   toJSON() {
     const data = this.mapper.parse({

@@ -342,6 +342,40 @@ export function createManualWorkflowAPI(app: Application) {
   });
 
   /**
+   * Delete multiple images in one request. Locked images are skipped rather
+   * than aborting the whole request.
+   */
+  manualRouter.post('/:id/images/bulk-action/delete', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    if (!Array.isArray(req.body.imageIds) || req.body.imageIds.some((id: unknown) => typeof id !== 'string')) {
+      throw new BadRequestError('imageIds must be an array of strings');
+    }
+
+    const result = await app.manualWorkflows.bulkDeleteImages(session.id, req.body.imageIds);
+    res.status(200).json(result);
+  });
+
+  /**
+   * Update editable metadata (nsfw and/or locked) on multiple images in one request.
+   */
+  manualRouter.patch('/:id/images/bulk-action/edit', async (req: Request, res: Response) => {
+    const session = await app.manualWorkflows.getSession(req.params.id.toString());
+    if (!Array.isArray(req.body.imageIds) || req.body.imageIds.some((id: unknown) => typeof id !== 'string')) {
+      throw new BadRequestError('imageIds must be an array of strings');
+    }
+
+    const updates: { locked?: boolean; nsfw?: boolean } = {};
+    if (typeof req.body.locked === 'boolean') updates.locked = req.body.locked;
+    if (typeof req.body.nsfw === 'boolean') updates.nsfw = req.body.nsfw;
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestError('nsfw or locked must be a boolean');
+    }
+
+    const images = await app.manualWorkflows.bulkEditImages(session.id, req.body.imageIds, updates);
+    res.status(200).json({ images });
+  });
+
+  /**
    * Discover every mappable widget input in the session's attached workflow — fetched
    * once by the Configuration page's field-mapping picker, not rendered as a standing
    * list (see the field-mapping-execution design spec's departure from the
