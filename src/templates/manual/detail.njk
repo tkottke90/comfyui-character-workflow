@@ -55,30 +55,32 @@
 
   <div class="gap-5">
     <div class="flex flex-col gap-5">
-      {% call ui.card('Images (' ~ workflow.images.length ~ ')') %}
+      {% call ui.card('Media (' ~ workflow.images.length ~ ')') %}
         {% if workflow.images.length == 0 %}
           <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-6 text-center text-steel-500 text-[13px]">
-            No images yet.
+            No media yet.
           </div>
         {% else %}
           <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
             {% for image in recentImages %}
-              <div class="aspect-square rounded-md overflow-hidden relative" {% if image.nsfw %}data-nsfw-enabled{% endif %}>
-                <img src="/manual/{{ workflow.id }}/assets/{{ image.filename }}" class="w-full h-full object-cover" alt="" />
+              <div class="aspect-square rounded-md overflow-hidden relative" {% if image.nsfw and image.kind != 'audio' %}data-nsfw-enabled{% endif %}>
+                {{ ui.mediaThumb('/manual/' + workflow.id + '/assets/' + image.filename, image.kind, 'manual-detail-media') }}
                 {% if image.final %}
                   <div class="absolute top-1 right-1">{{ ui.pill('final', 'green') }}</div>
                 {% endif %}
-                {% if image.nsfw %}
+                {% if image.nsfw and image.kind != 'audio' %}
                   <div class="absolute top-1 left-1">{{ ui.pill('nsfw', 'danger') }}</div>
                 {% endif %}
-                <span class="absolute bottom-1 right-1 rounded bg-black/60 text-white font-mono text-[11px] px-1">{{ image.size.width }}&times;{{ image.size.height }}</span>
+                {% if image.size %}
+                  <span class="absolute bottom-1 right-1 rounded bg-black/60 text-white font-mono text-[11px] px-1">{{ image.size.width }}&times;{{ image.size.height }}</span>
+                {% endif %}
               </div>
             {% endfor %}
           </div>
         {% endif %}
 
         <div class="flex justify-end p-4 gap-2">
-          <a href="/manual/{{ workflow.id }}/workspace/images" class="text-[14px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">View Images →</a>
+          <a href="/manual/{{ workflow.id }}/workspace/media" class="text-[14px] font-semibold text-apple-700 dark:text-apple-300 hover:underline">View Media →</a>
         </div>
       {% endcall %}
 

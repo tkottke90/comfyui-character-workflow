@@ -47,7 +47,7 @@ dialog[data-image-viewer]::backdrop {
   --nsfw-blur: 14px;
 }
 
-[data-nsfw-enabled] img {
+[data-nsfw-enabled] img, [data-nsfw-enabled] video {
   filter: blur(var(--nsfw-blur));
 }
 

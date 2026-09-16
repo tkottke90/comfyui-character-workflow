@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { resolveManualGraph } from '../lib/manual-execution-resolver';
 import { storeManualImage } from '../lib/manual-image-store';
 import { BadRequestError } from '../errors/http.errors';
-import { ManualGenerationSchema, ManualWorkflowRegistry, ManualWorkflowSession } from './manual-workflow.service';
+import { ManualGenerationSchema, ManualWorkflowRegistry, ManualWorkflowSession, MediaKind } from './manual-workflow.service';
 import { ComfyUIClient } from './comfyui-client.service';
 import { ComfyUISocket } from './comfyui-socket.service';
 import { BatchSubJob, JobError, JobRecord, JobStore, SingleJobRecord } from './job-store.service';
@@ -189,16 +190,28 @@ export function createManualExecutionService(
     }
   }
 
-  async function fetchResultImage(sessionId: string, promptId: string): Promise<Buffer | undefined> {
+  const OUTPUT_KEY_TO_KIND: Record<string, MediaKind> = {
+    images: 'image',
+    gifs: 'video', // ComfyUI-VideoHelperSuite emits video files under `gifs`
+    audio: 'audio',
+  };
+
+  async function fetchResultMedia(sessionId: string, promptId: string): Promise<{ buffer: Buffer; kind: MediaKind; extension: string } | undefined> {
     const session = await manualWorkflows.getSession(sessionId);
     const resultOutput = session.resultOutput;
     if (!resultOutput) return undefined;
 
     const historyEntry = await comfyClient.getHistoryEntry(promptId);
-    const image = historyEntry?.outputs[resultOutput.nodeId]?.images?.[resultOutput.outputIndex];
-    if (!historyEntry || !image) return undefined;
+    const nodeOutputs = historyEntry?.outputs[resultOutput.nodeId];
+    if (!historyEntry || !nodeOutputs) return undefined;
 
-    return comfyClient.viewImage(image.filename, image.subfolder, image.type);
+    for (const [key, kind] of Object.entries(OUTPUT_KEY_TO_KIND)) {
+      const item = nodeOutputs[key as keyof typeof nodeOutputs]?.[resultOutput.outputIndex];
+      if (!item) continue;
+      const buffer = await comfyClient.viewImage(item.filename, item.subfolder, item.type);
+      return { buffer, kind, extension: path.extname(item.filename).slice(1) || 'bin' };
+    }
+    return undefined;
   }
 
   async function markGenerationDone(sessionId: string, generationId: string, imageId: string): Promise<void> {
@@ -223,8 +236,8 @@ export function createManualExecutionService(
     record: SingleJobRecord
   ): Promise<void> {
     try {
-      const bytes = await fetchResultImage(owner.sessionId, promptId);
-      if (!bytes) {
+      const result = await fetchResultMedia(owner.sessionId, promptId);
+      if (!result) {
         const message = 'ComfyUI reported completion but no result image was found';
         await jobStore.set(owner.sessionId, owner.generationId, {
           ...record,
@@ -240,8 +253,9 @@ export function createManualExecutionService(
         manualWorkflows,
         session.id,
         session.workflowDir,
-        bytes,
-        'png'
+        result.buffer,
+        result.extension,
+        result.kind
       );
       await markGenerationDone(owner.sessionId, owner.generationId, image.id);
       await jobStore.set(owner.sessionId, owner.generationId, { ...record, status: 'done', resultPath: image.filename });
@@ -267,8 +281,8 @@ export function createManualExecutionService(
     });
 
     try {
-      const bytes = await fetchResultImage(owner.sessionId, promptId);
-      if (!bytes) {
+      const result = await fetchResultMedia(owner.sessionId, promptId);
+      if (!result) {
         const message = 'ComfyUI reported completion but no result image was found';
         await jobStore.set(
           owner.sessionId,
@@ -284,8 +298,9 @@ export function createManualExecutionService(
         manualWorkflows,
         session.id,
         session.workflowDir,
-        bytes,
-        'png'
+        result.buffer,
+        result.extension,
+        result.kind
       );
       await markGenerationDone(owner.sessionId, owner.generationId, image.id);
       await jobStore.set(owner.sessionId, jobKeyFor(owner), replaceSubJob({ status: 'done', resultPath: image.filename }));

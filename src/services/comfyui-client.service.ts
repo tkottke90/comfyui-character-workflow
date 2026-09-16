@@ -60,7 +60,7 @@ export interface HistoryOutputImage {
 }
 
 export interface HistoryEntry {
-  outputs: Record<string, { images?: HistoryOutputImage[] }>;
+  outputs: Record<string, { images?: HistoryOutputImage[]; gifs?: HistoryOutputImage[]; audio?: HistoryOutputImage[] }>;
   status: {
     completed: boolean;
     statusStr?: string;

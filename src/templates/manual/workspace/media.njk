@@ -1,7 +1,7 @@
 {% extends "layout.njk" %}
 {% set section = "manual" %}
 {% import "macros.njk" as ui %}
-{% set workspaceTab = "images" %}
+{% set workspaceTab = "media" %}
 {% block content %}
   {{ ui.crumbs([{label: 'Manual', href: '/manual'}, {label: session.workflowName, href: '/manual/' + session.id}, {label: 'Workspace'}]) }}
   <h1 class="text-xl font-black tracking-tight mb-1">{{ session.workflowName }}</h1>
@@ -9,7 +9,7 @@
 
   {% if images.length == 0 %}
     <div class="rounded-lg border border-dashed border-steel-300 dark:border-steel-700 p-8 text-center text-steel-500">
-      No images yet.
+      No media yet.
     </div>
   {% else %}
     <div class="flex items-center justify-between mb-4">
@@ -20,31 +20,39 @@
         <button type="button" data-select-cancel class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline hidden">Cancel</button>
       </div>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" data-images-endpoint="/api/v1/manual/{{ session.id }}/images" data-select-mode-root>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 items-start" data-images-endpoint="/api/v1/manual/{{ session.id }}/images" data-select-mode-root>
       {% for image in images %}
         {% set imageUrl = '/manual/' + session.id + '/assets/' + image.filename %}
         <div class="rounded-lg border border-steel-200 dark:border-steel-800 bg-white dark:bg-steel-900 overflow-hidden" data-image-tile data-image-id="{{ image.id }}" {% if image.locked %}data-locked{% endif %}>
-          <div class="aspect-[3/4] relative overflow-hidden" data-nsfw-target {% if image.nsfw %}data-nsfw-enabled{% endif %}>
-            <input type="checkbox" data-select-checkbox class="absolute top-1.5 left-1.5 z-10 h-4 w-4" aria-label="Select image" />
-            <img src="/manual/{{ session.id }}/assets/{{ image.filename }}"
-              data-viewer-trigger data-viewer-group="workspace-images" class="absolute inset-0 w-full h-full object-cover" alt="" />
-            <div data-nsfw-badge class="absolute bottom-1 right-1">{{ ui.pill('nsfw', 'danger') }}</div>
-          </div>
+          {% if image.kind == 'audio' %}
+            <div class="relative h-16 overflow-hidden">
+              <input type="checkbox" data-select-checkbox class="absolute top-1.5 left-1.5 z-10 h-4 w-4" aria-label="Select image" />
+              {{ ui.mediaThumb(imageUrl, image.kind, 'workspace-media') }}
+            </div>
+          {% else %}
+            <div class="aspect-[3/4] relative overflow-hidden" data-nsfw-target {% if image.nsfw %}data-nsfw-enabled{% endif %}>
+              <input type="checkbox" data-select-checkbox class="absolute top-1.5 left-1.5 z-10 h-4 w-4" aria-label="Select image" />
+              {{ ui.mediaThumb(imageUrl, image.kind, 'workspace-media') }}
+              <div data-nsfw-badge class="absolute bottom-1 right-1">{{ ui.pill('nsfw', 'danger') }}</div>
+            </div>
+          {% endif %}
           <div class="p-2.5">
             <div class="mb-1.5 text-[12px] text-steel-500">{{ ui.mono(image.createdAt.toISOString().slice(0, 16).replace('T', ' ')) }}</div>
             <div data-tile-actions class="flex items-center justify-between">
               <div data-delete-slot>
-                <form method="post" action="/manual/{{ session.id }}/workspace/images/{{ image.id }}/delete"
-                  onsubmit="return confirm('Delete this image? This cannot be undone.');">
+                <form method="post" action="/manual/{{ session.id }}/workspace/media/{{ image.id }}/delete"
+                  onsubmit="return confirm('Delete this item? This cannot be undone.');">
                   <button type="submit" class="text-[12px] font-semibold text-rose-700 dark:text-rose-300 hover:underline">Delete</button>
                 </form>
               </div>
               <div class="flex items-center gap-3">
                 {% call ui.copyable(imageUrl, inline=true, absolute=true) %}Copy URL{% endcall %}
-                <button type="button" data-nsfw-toggle
-                  class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">
-                  {{ 'Unset NSFW' if image.nsfw else 'Set NSFW' }}
-                </button>
+                {% if image.kind != 'audio' %}
+                  <button type="button" data-nsfw-toggle
+                    class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">
+                    {{ 'Unset NSFW' if image.nsfw else 'Set NSFW' }}
+                  </button>
+                {% endif %}
                 <button type="button" data-lock-toggle
                   class="text-[12px] font-semibold text-steel-600 dark:text-steel-300 hover:underline">
                   {{ 'Unlock' if image.locked else 'Lock' }}

@@ -213,3 +213,28 @@
     <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[11px] px-2 py-1" data-tile-status></div>
   </div>
 {% endmacro %}
+
+{#
+  A single media thumbnail (image, video, or audio) wired for the shared
+  click-to-enlarge preview dialog (partials/image-viewer.njk +
+  public/image-viewer.js). Video shows a static first-frame preview (no
+  controls — playback happens in the dialog); audio has no visual thumbnail,
+  so it shows an icon placeholder carrying `data-viewer-src` instead of a
+  real media element. Callers place this inside their own tile wrapper.
+#}
+{% macro mediaThumb(url, kind, viewerGroup) %}
+  {% if kind == 'video' %}
+    <video src="{{ url }}" preload="metadata" muted playsinline
+      data-viewer-trigger data-viewer-kind="video" data-viewer-group="{{ viewerGroup }}"
+      class="absolute inset-0 w-full h-full object-cover"></video>
+  {% elif kind == 'audio' %}
+    <div data-viewer-trigger data-viewer-kind="audio" data-viewer-src="{{ url }}" data-viewer-group="{{ viewerGroup }}"
+      class="absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer text-steel-400">
+      <span class="text-2xl">&#9834;</span>
+      <span class="text-[11px]">Audio</span>
+    </div>
+  {% else %}
+    <img src="{{ url }}" data-viewer-trigger data-viewer-group="{{ viewerGroup }}"
+      class="absolute inset-0 w-full h-full object-cover" alt="" />
+  {% endif %}
+{% endmacro %}

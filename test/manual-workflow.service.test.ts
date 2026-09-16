@@ -104,6 +104,23 @@ describe('manual-workflow.service schemas', () => {
       const image = ImageSchema.parse({ id: 'x', filename: 'x.png', size: { width: 1, height: 1 } });
       expect(image.filename).to.equal('x.png');
     });
+
+    it('defaults kind to "image" when omitted', () => {
+      const image = ImageSchema.parse({ id: 'x', filename: 'x.png', size: { width: 1, height: 1 } });
+      expect(image.kind).to.equal('image');
+    });
+
+    it('parses a video record with no size', () => {
+      const image = ImageSchema.parse({ id: 'x', kind: 'video', filename: 'x.mp4' });
+      expect(image.kind).to.equal('video');
+      expect(image.size).to.equal(undefined);
+    });
+
+    it('parses an audio record with no size', () => {
+      const image = ImageSchema.parse({ id: 'x', kind: 'audio', filename: 'x.mp3' });
+      expect(image.kind).to.equal('audio');
+      expect(image.size).to.equal(undefined);
+    });
   });
 });
 

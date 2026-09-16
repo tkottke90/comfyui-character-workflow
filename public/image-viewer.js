@@ -6,16 +6,20 @@
   //
   // - One `[data-image-viewer]` `<dialog>` per page (partials/image-viewer.njk,
   //   included once from layout.njk), containing `[data-viewer-image]`,
-  //   `[data-viewer-prev]`/`[data-viewer-next]` (hidden unless a group has more
-  //   than one member), `[data-viewer-close]`, and an empty
-  //   `[data-viewer-checklist-slot]`.
-  // - Any element with `data-viewer-trigger` opens the dialog on click. If it's
-  //   an `<img>`, its own `src`/`currentSrc` is shown; otherwise (an overlay
-  //   button placed over a tile whose own click target is already spoken for)
-  //   the nearest `<img>` inside its enclosing tile
-  //   (`[data-live-tile]`/`[data-gallery-tile]`/`[data-picker-tile]`/
-  //   `[data-viewer-tile]`) is used instead. The URL is always read live off
-  //   the `<img>` at click/step time — never cached — so SSE-patched tiles and
+  //   `[data-viewer-video]`, `[data-viewer-audio]` (exactly one shown at a
+  //   time, per trigger kind), `[data-viewer-prev]`/`[data-viewer-next]`
+  //   (hidden unless a group has more than one member), `[data-viewer-close]`,
+  //   and an empty `[data-viewer-checklist-slot]`.
+  // - Any element with `data-viewer-trigger` opens the dialog on click.
+  //   `data-viewer-kind="video"|"audio"` on the trigger selects which of the
+  //   three media elements is shown (default: image). The URL is resolved
+  //   from, in order: an explicit `data-viewer-src` attribute on the trigger
+  //   (used when the trigger itself isn't a media element, e.g. an audio
+  //   placeholder icon); the trigger's own `src`/`currentSrc` if it's an
+  //   `<img>`/`<video>`; otherwise the nearest `img`/`video`/`audio` inside its
+  //   enclosing tile (`[data-live-tile]`/`[data-gallery-tile]`/
+  //   `[data-picker-tile]`/`[data-viewer-tile]`). The URL is always read live
+  //   at click/step time — never cached — so SSE-patched tiles and
   //   client-side file-preview swaps can never go stale.
   // - `data-viewer-group="<name>"` on a trigger groups it with every other
   //   trigger sharing that name for prev/next stepping.
@@ -36,30 +40,43 @@
   if (!dialog) return;
 
   var image = dialog.querySelector('[data-viewer-image]');
+  var video = dialog.querySelector('[data-viewer-video]');
+  var audio = dialog.querySelector('[data-viewer-audio]');
   var prevBtn = dialog.querySelector('[data-viewer-prev]');
   var nextBtn = dialog.querySelector('[data-viewer-next]');
   var closeBtn = dialog.querySelector('[data-viewer-close]');
   var slot = dialog.querySelector('[data-viewer-checklist-slot]');
-  if (!image || !prevBtn || !nextBtn || !closeBtn || !slot) return;
+  if (!image || !video || !audio || !prevBtn || !nextBtn || !closeBtn || !slot) return;
 
   var currentGroup = null;
   var currentIndex = -1;
   var movedPanel = null; // { node, parent, nextSibling }
 
-  function resolveImageUrl(trigger) {
-    if (trigger.tagName === 'IMG') {
+  function resolveMediaUrl(trigger) {
+    var explicit = trigger.getAttribute('data-viewer-src');
+    if (explicit) return explicit;
+    if (trigger.tagName === 'IMG' || trigger.tagName === 'VIDEO') {
       return trigger.currentSrc || trigger.getAttribute('src') || '';
     }
     var scope =
       trigger.closest(
         '[data-live-tile], [data-gallery-tile], [data-picker-tile], [data-viewer-tile]',
       ) || trigger.parentElement;
-    var img = scope && scope.querySelector('img');
-    return img ? img.currentSrc || img.getAttribute('src') || '' : '';
+    var media = scope && scope.querySelector('img, video, audio');
+    return media ? media.currentSrc || media.getAttribute('src') || '' : '';
   }
 
   function showTrigger(trigger) {
-    image.src = resolveImageUrl(trigger);
+    var kind = trigger.getAttribute('data-viewer-kind') || 'image';
+    video.pause();
+    audio.pause();
+    image.classList.add('hidden');
+    video.classList.add('hidden');
+    audio.classList.add('hidden');
+
+    var el = kind === 'video' ? video : kind === 'audio' ? audio : image;
+    el.src = resolveMediaUrl(trigger);
+    el.classList.remove('hidden');
   }
 
   function restorePanel() {
@@ -144,6 +161,10 @@
   });
   dialog.addEventListener('close', function () {
     image.src = '';
+    video.pause();
+    video.src = '';
+    audio.pause();
+    audio.src = '';
     restorePanel();
   });
 

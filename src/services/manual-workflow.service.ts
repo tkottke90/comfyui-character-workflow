@@ -8,10 +8,14 @@ import { readFileWithSchema, writeJsonFile } from "@/lib/files";
 import { Logger } from "@tkottke90/logger";
 import { DefaultDateSchema } from "@/lib/validation";
 
+export const MediaKindSchema = z.enum(['image', 'video', 'audio']);
+export type MediaKind = z.infer<typeof MediaKindSchema>;
+
 export const ImageSchema = z.object({
   id: z.string(),
+  kind: MediaKindSchema.default('image'),
   filename: z.string(),
-  size: z.object({ width: z.number(), height: z.number() }),
+  size: z.object({ width: z.number(), height: z.number() }).optional(),
   parent: z.string().optional(),
   createdAt: z.coerce.date().default(() => new Date()),
   final: z.boolean().default(false),

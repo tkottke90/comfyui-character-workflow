@@ -150,30 +150,30 @@ export function createManualViewRouter(router: Router) {
     });
   });
 
-  router.get('/:id/workspace/images', async (req: Request, res: Response) => {
+  router.get('/:id/workspace/media', async (req: Request, res: Response) => {
     const session = await req.app.manualWorkflows.getSession(req.params.id.toString());
     const sessionJson = session.toJSON() as ManualWorkflowSession;
     const images = [...sessionJson.images].sort(SortImages);
 
-    res.render('manual/workspace/images.njk', {
+    res.render('manual/workspace/media.njk', {
       session: sessionJson,
       images,
       error: typeof req.query.deleteError === 'string' ? req.query.deleteError : undefined
     });
   });
 
-  router.post('/:id/workspace/images/:imageId/delete', async (req: Request, res: Response) => {
+  router.post('/:id/workspace/media/:imageId/delete', async (req: Request, res: Response) => {
     try {
       await req.app.manualWorkflows.deleteImage(req.params.id.toString(), req.params.imageId.toString());
     } catch (err) {
       if (err instanceof ConflictError) {
         const message = encodeURIComponent(err.message);
-        return res.redirect(`/manual/${req.params.id}/workspace/images?deleteError=${message}`);
+        return res.redirect(`/manual/${req.params.id}/workspace/media?deleteError=${message}`);
       }
       throw err;
     }
 
-    res.redirect(`/manual/${req.params.id}/workspace/images`);
+    res.redirect(`/manual/${req.params.id}/workspace/media`);
   });
 
   router.get('/:id', async (req: Request, res: Response) => {

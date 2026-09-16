@@ -574,7 +574,7 @@ describe('manual field CRUD + image upload + asset serving', () => {
     });
   });
 
-  describe('POST /manual/:id/workspace/images/:imageId/delete', () => {
+  describe('POST /manual/:id/workspace/media/:imageId/delete', () => {
     async function seedImage() {
       const res = await fetch(`${app.baseUrl}/api/v1/manual/${sessionId}/images`, {
         method: 'POST',
@@ -588,13 +588,13 @@ describe('manual field CRUD + image upload + asset serving', () => {
     it('deletes an unlocked image and redirects without an error param', async () => {
       const imageId = await seedImage();
 
-      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/images/${imageId}/delete`, {
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/media/${imageId}/delete`, {
         method: 'POST',
         redirect: 'manual',
       });
 
       expect(res.status).to.equal(302);
-      expect(res.headers.get('location')).to.equal(`/manual/${sessionId}/workspace/images`);
+      expect(res.headers.get('location')).to.equal(`/manual/${sessionId}/workspace/media`);
 
       const session = await app.manualWorkflows.getSession(sessionId);
       expect(session.images).to.have.length(0);
@@ -608,14 +608,14 @@ describe('manual field CRUD + image upload + asset serving', () => {
         body: JSON.stringify({ locked: true }),
       });
 
-      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/images/${imageId}/delete`, {
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/media/${imageId}/delete`, {
         method: 'POST',
         redirect: 'manual',
       });
 
       expect(res.status).to.equal(302);
       const location = res.headers.get('location') ?? '';
-      expect(location).to.include(`/manual/${sessionId}/workspace/images`);
+      expect(location).to.include(`/manual/${sessionId}/workspace/media`);
       expect(location).to.include('deleteError=');
 
       const session = await app.manualWorkflows.getSession(sessionId);
@@ -623,10 +623,10 @@ describe('manual field CRUD + image upload + asset serving', () => {
     });
   });
 
-  describe('GET /manual/:id/workspace/images', () => {
+  describe('GET /manual/:id/workspace/media', () => {
     it('renders the error banner when a deleteError query param is present', async () => {
       const message = encodeURIComponent('Image is locked and cannot be deleted');
-      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/images?deleteError=${message}`);
+      const res = await fetch(`${app.baseUrl}/manual/${sessionId}/workspace/media?deleteError=${message}`);
 
       expect(res.status).to.equal(200);
       const body = await res.text();

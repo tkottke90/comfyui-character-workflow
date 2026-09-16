@@ -46,9 +46,20 @@ function readBody(req: http.IncomingMessage): Promise<Buffer> {
  *  immediately and the tests below would never see a genuine "queued"/"running" state. */
 async function startStubComfyServer(opts: {
   onPrompt: (graph: Record<string, { inputs?: Record<string, unknown> }>, promptId: string) => void;
+  // Which ComfyUI output key/extension/bytes the stub's history+view routes serve —
+  // defaults match today's image-only behavior; tests exercising video/audio resolution
+  // (fetchResultMedia's gifs/audio key handling) override these.
+  outputKey?: string;
+  resultExtension?: string;
+  viewBytes?: Buffer;
+  viewContentType?: string;
 }) {
   let promptCounter = 0;
   const completedPromptIds = new Set<string>();
+  const outputKey = opts.outputKey ?? 'images';
+  const resultExtension = opts.resultExtension ?? 'png';
+  const viewBytes = opts.viewBytes ?? ONE_PIXEL_PNG;
+  const viewContentType = opts.viewContentType ?? 'image/png';
 
   const server = http.createServer(async (req, res) => {
     const pathname = (req.url ?? '').split('?')[0];
@@ -73,7 +84,7 @@ async function startStubComfyServer(opts: {
         JSON.stringify({
           [promptId]: {
             outputs: {
-              '4': { images: [{ filename: `${promptId}.png`, subfolder: '', type: 'output' }] },
+              '4': { [outputKey]: [{ filename: `${promptId}.${resultExtension}`, subfolder: '', type: 'output' }] },
             },
             status: { completed: true, statusStr: 'success' },
           },
@@ -83,8 +94,8 @@ async function startStubComfyServer(opts: {
     }
 
     if (req.method === 'GET' && pathname === '/view') {
-      res.writeHead(200, { 'Content-Type': 'image/png' });
-      res.end(ONE_PIXEL_PNG);
+      res.writeHead(200, { 'Content-Type': viewContentType });
+      res.end(viewBytes);
       return;
     }
 
@@ -228,6 +239,118 @@ describe('manual-execution.service', () => {
       expect(
         fs.existsSync(path.join(session.workflowDir, 'assets', finalSession.images[0].filename)),
       ).to.equal(true);
+    } finally {
+      socket.close();
+      await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
+      await httpStub.close();
+      await jobStore.close();
+    }
+  });
+
+  it('resolves a result under the `gifs` output key as kind: video, with no size and the extension from the returned filename', async () => {
+    const manualWorkflows = ManualWorkflowRegistry.fromPath(path.join(dir, 'registry.json'));
+    const session = await manualWorkflows.addSession('Test Session');
+    await writeFile(path.join(session.workflowDir, 'workflow.json'), JSON.stringify(TEST_GRAPH));
+    await manualWorkflows.updateSession(session.id, {
+      workflowFile: 'workflow.json',
+      resultOutput: { nodeId: '4', outputIndex: 0 },
+    });
+
+    const httpStub = await startStubComfyServer({
+      onPrompt: () => {},
+      outputKey: 'gifs',
+      resultExtension: 'mp4',
+      viewBytes: Buffer.from('fake mp4 bytes'),
+      viewContentType: 'video/mp4',
+    });
+    const wsStub = await startStubWsServer();
+    const jobStore = createJobStore(path.join(dir, 'jobs'));
+    const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
+    const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+
+    try {
+      const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
+      socket.connect();
+      await opened;
+
+      const manualExecution = createManualExecutionService({
+        manualWorkflows,
+        comfyClient,
+        socket,
+        jobStore,
+        clientId: 'app-client',
+      });
+
+      const { generationId } = await manualExecution.submitGeneration(session.id, 1);
+      httpStub.markDone('prompt-1');
+      wsStub.send({ type: 'executing', data: { node: null, prompt_id: 'prompt-1' } });
+
+      await waitUntil(() => {
+        const job = jobStore.get(session.id, generationId);
+        return job?.kind === 'single' && job.status === 'done' ? job : undefined;
+      });
+
+      const finalSession = await manualWorkflows.getSession(session.id);
+      expect(finalSession.images).to.have.length(1);
+      expect(finalSession.images[0].kind).to.equal('video');
+      expect(finalSession.images[0].filename).to.match(/\.mp4$/);
+      expect(finalSession.images[0].size).to.equal(undefined);
+    } finally {
+      socket.close();
+      await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));
+      await httpStub.close();
+      await jobStore.close();
+    }
+  });
+
+  it('resolves a result under the `audio` output key as kind: audio, with no size and the extension from the returned filename', async () => {
+    const manualWorkflows = ManualWorkflowRegistry.fromPath(path.join(dir, 'registry.json'));
+    const session = await manualWorkflows.addSession('Test Session');
+    await writeFile(path.join(session.workflowDir, 'workflow.json'), JSON.stringify(TEST_GRAPH));
+    await manualWorkflows.updateSession(session.id, {
+      workflowFile: 'workflow.json',
+      resultOutput: { nodeId: '4', outputIndex: 0 },
+    });
+
+    const httpStub = await startStubComfyServer({
+      onPrompt: () => {},
+      outputKey: 'audio',
+      resultExtension: 'mp3',
+      viewBytes: Buffer.from('fake mp3 bytes'),
+      viewContentType: 'audio/mpeg',
+    });
+    const wsStub = await startStubWsServer();
+    const jobStore = createJobStore(path.join(dir, 'jobs'));
+    const comfyClient = createComfyUIClient({ baseUrl: httpStub.baseUrl });
+    const socket = createComfyUISocket({ baseUrl: `http://127.0.0.1:${wsStub.port}`, clientId: 'app-client' });
+
+    try {
+      const opened = new Promise<void>((resolve) => socket.onOpen(() => resolve()));
+      socket.connect();
+      await opened;
+
+      const manualExecution = createManualExecutionService({
+        manualWorkflows,
+        comfyClient,
+        socket,
+        jobStore,
+        clientId: 'app-client',
+      });
+
+      const { generationId } = await manualExecution.submitGeneration(session.id, 1);
+      httpStub.markDone('prompt-1');
+      wsStub.send({ type: 'executing', data: { node: null, prompt_id: 'prompt-1' } });
+
+      await waitUntil(() => {
+        const job = jobStore.get(session.id, generationId);
+        return job?.kind === 'single' && job.status === 'done' ? job : undefined;
+      });
+
+      const finalSession = await manualWorkflows.getSession(session.id);
+      expect(finalSession.images).to.have.length(1);
+      expect(finalSession.images[0].kind).to.equal('audio');
+      expect(finalSession.images[0].filename).to.match(/\.mp3$/);
+      expect(finalSession.images[0].size).to.equal(undefined);
     } finally {
       socket.close();
       await new Promise<void>((resolve) => wsStub.wss.close(() => resolve()));

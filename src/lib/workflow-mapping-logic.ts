@@ -114,13 +114,14 @@ export interface OutputNodeCandidate {
   classType: string;
 }
 
-const OUTPUT_NODE_KEYWORDS = ['save', 'preview'];
+const OUTPUT_NODE_KEYWORDS = ['save', 'preview', 'combine', 'video', 'audio', 'export'];
 
 /**
  * Plausible "result output" nodes among the given parsed inputs — anything whose class
- * type or title suggests it saves/previews an image (SaveImage, PreviewImage, and the
- * various custom "Image Saver"-style nodes third-party packs ship), so a result-output
- * picker only offers nodes worth pointing at instead of every node in the graph. Only
+ * type or title suggests it saves/previews a result (SaveImage, PreviewImage, and the
+ * various custom "Image Saver"-style nodes third-party packs ship, plus video/audio nodes
+ * like VideoHelperSuite's VHS_VideoCombine), so a result-output picker only offers nodes
+ * worth pointing at instead of every node in the graph. Only
  * nodes with at least one mappable (non-link) input show up here, since that's all
  * parseWorkflowGraph captures — a save node wired with only link inputs and no literal
  * ones (rare; stock SaveImage always has filename_prefix) won't appear.
